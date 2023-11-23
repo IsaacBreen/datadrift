@@ -1,3 +1,4 @@
+import nltk
 import pandas as pd
 import numpy as np
 from pandas import CategoricalDtype
@@ -8,6 +9,8 @@ from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score
 from nltk.tokenize import word_tokenize
 import gensim
+
+nltk.download('punkt')
 
 # Set seed for reproducibility
 np.random.seed(0)
@@ -86,10 +89,11 @@ data['verbatim_embedding'] = data['verbatim_cleaned'].apply(lambda x: get_senten
 embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
 
 # Combining the sentence embeddings with the other features
-data_combined = pd.concat([data, embeddings_df], axis=1)
+data_combined = pd.concat([data, tfidf_df, embeddings_df], axis=1)
 
 # Defining the feature columns and the target column
-features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + list(embeddings_df.columns)
+features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + [f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])] + [f"embedding_{i}" for i in range(embeddings_df.shape[1])]
+target = 'is_systemic_risk'
 
 # Splitting the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(data_combined[features], data_combined[target], test_size=0.2, random_state=0)
@@ -135,7 +139,20 @@ new_data['verbatim_text'] = new_data['is_systemic_risk'].apply(generate_verbatim
 new_data['category_feature_encoded'] = le.transform(new_data['category_feature'])
 new_tfidf_matrix = tfidf.transform(new_data['verbatim_text']).toarray()
 new_tfidf_df = pd.DataFrame(new_tfidf_matrix, columns=[f"tfidf_{i}" for i in range(new_tfidf_matrix.shape[1])])
-new_data_combined = pd.concat([new_data, new_tfidf_df], axis=1)
+
+# Generating sentence embeddings for the verbatim text column using Word2Vec
+# Step 1: Preprocess Text Data (Basic)
+new_data['verbatim_cleaned'] = new_data['verbatim_text'].str.lower()
+new_data['verbatim_cleaned'] = new_data['verbatim_cleaned'].apply(word_tokenize)
+
+# Step 3: Create Sentence Embeddings
+new_data['verbatim_embedding'] = new_data['verbatim_cleaned'].apply(lambda x: get_sentence_embedding(x, word2vec_model))
+
+# Step 4: Prepare the Dataset
+# Convert the list of embeddings into a DataFrame
+new_embeddings_df = pd.DataFrame(new_data['verbatim_embedding'].tolist())
+
+new_data_combined = pd.concat([new_data, new_tfidf_df, new_embeddings_df], axis=1)
 
 # Extracting features for the new data
 X_new = new_data_combined[features]
