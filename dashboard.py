@@ -84,6 +84,19 @@ app.layout = html.Div([
             metadata_div,
         ], className='six columns', id='drift-detection-content'),
     ], className='row'),
+    
+    # Placeholder for Model Performance Graph
+    dcc.Graph(id='model_performance_graph', figure={}),
+
+    # Placeholder for Feature Importance Graph
+    dcc.Graph(id='feature_importance_graph', figure={}),
+
+    # Placeholder for Drift Report Table
+    dash_table.DataTable(
+        id='drift_report_table',
+        columns=[{"name": "", "id": ""}],  # Empty initial columns
+        data=[],  # Empty initial data
+    ),
 ], className='container')
 
 @app.callback(
