@@ -24,11 +24,11 @@ class DataGenerator:
     n_rows: int
     categories: list
     category_type: pd.CategoricalDtype
-    p: float = 0.3
-    loc1: float = 40
-    loc2: float = 50
-    scale1: float = 10
-    scale2: float = 10
+    p: float
+    loc1: float
+    loc2: float
+    scale1: float
+    scale2: float
 
     def generate_data(self):
         half_n_rows = self.n_rows // 2
@@ -323,7 +323,7 @@ for line in metadata.split('\n'):
 
 def generate_example_drift_report():
     # Data Generation (assuming this is specific and remains as provided)
-    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
+    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True), p=0.3, loc1=10, loc2=20, scale1=10, scale2=10)
     data = data_gen.generate_data()
 
     # Define feature types
@@ -354,6 +354,7 @@ def generate_example_drift_report():
     print("Model Accuracy:", model_training.evaluate(y_test, y_pred))
 
     # New Data for Drift Detection
+    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True), p=0.4, loc1=15, loc2=20, scale1=10, scale2=10)
     new_data = data_gen.generate_data()
     new_data = feat_eng.transform(new_data)
 
