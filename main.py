@@ -1,5 +1,4 @@
 from __future__ import annotations
-from termcolor import colored
 
 from dataclasses import dataclass
 from typing import Optional
@@ -14,6 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from termcolor import colored
 from xgboost import XGBClassifier
 
 nltk.download('punkt')
@@ -343,6 +343,11 @@ Kullback-Leibler Divergence: Measures how one probability distribution diverges 
 Population Stability Index: Measures the stability of a feature's distribution over time.
 Z Test Statistic & P-Value: Used for hypothesis testing in boolean features.
 """
+metadata_data = {}
+for line in metadata.split('\n'):
+    if line:
+        key, value = line.split(':')
+        metadata_data[key.strip()] = value.strip()
 
 if __name__ == "__main__":
     drift_det = DriftDetection()
