@@ -1,20 +1,17 @@
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass
 
-from matplotlib import pyplot as plt
-from sklearn.model_selection import train_test_split
+import gensim
+import nltk
+import numpy as np
+import pandas as pd
+from nltk.tokenize import word_tokenize
+from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score
-from nltk.tokenize import word_tokenize
-import gensim
-from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde
-import seaborn as sns
 
-# Ensure NLTK punkt is downloaded
-import nltk
 nltk.download('punkt')
 
 
