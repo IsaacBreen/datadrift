@@ -194,24 +194,19 @@ def drift_detection_report(data, new_data, drift_detector):
     kld_threshold = 0.1
     psi_threshold = 0.2
 
-    # Prepare a DataFrame for visualization
-    metrics = ['KS Test', 'Chi-Squared Test', 'Wasserstein Distance', 'KLD', 'PSI']
-    values = [ks_stat, chi2_stat, wasserstein_dist, kld, psi_float_feature]
-    p_values = [ks_p, chi2_p, None, None, None]
-    thresholds = [ks_threshold, chi2_threshold, wasserstein_threshold, kld_threshold, psi_threshold]
-    interpretations = ['Drift Detected' if (val > threshold or (metric == 'Chi-Squared Test' and p_val < threshold)) else 'No Drift' for metric, val, p_val, threshold in zip(metrics, values, p_values, thresholds)]
-
+    # Prepare a DataFrame for the report
     drift_report = pd.DataFrame({
         'Metric': ['KS Test', 'Chi-Squared Test', 'Wasserstein Distance', 'KLD', 'PSI'],
+        'Data Feature': ['float_feature', 'bool_feature', 'float_feature', 'float_feature', 'float_feature'],
         'Value': [ks_stat, chi2_stat, wasserstein_dist, kld, psi_float_feature],
-        'P-Value': [ks_p, chi2_p, None, None, None],
+        'P-Value': [ks_p if ks_p is not None else "N/A", chi2_p if chi2_p is not None else "N/A", "N/A", "N/A", "N/A"],
         'Threshold': [ks_threshold, chi2_threshold, wasserstein_threshold, kld_threshold, psi_threshold],
-        'Interpretation': [
-            'Drift Detected' if (ks_stat > ks_threshold) else 'No Drift',
-            'Drift Detected' if (chi2_p < chi2_threshold) else 'No Drift',
-            'Drift Detected' if (wasserstein_dist > wasserstein_threshold) else 'No Drift',
-            'Drift Detected' if (kld > kld_threshold) else 'No Drift',
-            'Drift Detected' if (psi_float_feature > psi_threshold) else 'No Drift'
+        'Drift': [
+            ks_stat > ks_threshold,
+            chi2_p < chi2_threshold if chi2_p is not None else False,
+            wasserstein_dist > wasserstein_threshold,
+            kld > kld_threshold,
+            psi_float_feature > psi_threshold
         ]
     })
 
@@ -221,7 +216,7 @@ def drift_detection_report(data, new_data, drift_detector):
 
     # Plotting
     plt.figure(figsize=(10, 6))
-    sns.barplot(x='Metric', y='Value', hue='Interpretation', data=drift_report, palette='viridis')
+    sns.barplot(x='Metric', y='Value', hue='Drift', data=drift_report, palette='viridis')
     plt.axhline(ks_threshold, color='red', linestyle='--', label='KS Threshold')
     plt.axhline(chi2_threshold, color='blue', linestyle='--', label='Chi2 Threshold')
     plt.axhline(wasserstein_threshold, color='green', linestyle='--', label='Wasserstein Threshold')
