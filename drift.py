@@ -38,7 +38,7 @@ class DriftDetection:
         return np.sum(p_x * np.log(p_x / q_x)) * (x[1] - x[0])
 
     @staticmethod
-    def calculate_psi_with_smoothing(expected, actual, buckets=10, axis=0, smoothing_value=0.001):
+    def calculate_psi_with_smoothing(expected, actual, buckets=10, smoothing_value=0.001):
         breakpoints = np.linspace(
             np.min([np.min(expected), np.min(actual)]),
             np.max([np.max(expected), np.max(actual)]),
@@ -213,7 +213,7 @@ def generate_example_drift_report():
     return drift_report
 
 
-if __name__ == "__main__":
+def example():
     drift_report = generate_example_drift_report()
     conclusions = generate_conclusions(drift_report)
 
@@ -224,3 +224,6 @@ if __name__ == "__main__":
     print(conclusions.to_string(index=False))
     print("\nMetadata:")
     print(metadata)
+
+if __name__ == "__main__":
+    example()

@@ -78,7 +78,8 @@ class FeatureEngineering:
 
         return data
 
-    def create_sentence_embeddings(self, data, feature, w2v_model):
+    @staticmethod
+    def create_sentence_embeddings(data, feature, w2v_model):
         def get_sentence_embedding(sentence):
             embeddings = [w2v_model.wv[word] for word in sentence if word in w2v_model.wv]
             return np.mean(embeddings, axis=0) if embeddings else np.zeros(w2v_model.vector_size)

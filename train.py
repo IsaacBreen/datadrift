@@ -15,5 +15,6 @@ class Model:
     def predict(self, X):
         return self.model.predict(X)
 
-    def evaluate(self, y_true, y_pred):
+    @staticmethod
+    def evaluate(y_true, y_pred):
         return accuracy_score(y_true, y_pred)
