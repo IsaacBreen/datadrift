@@ -26,8 +26,8 @@ class DataGenerator:
         bool_col_systemic = np.random.choice([True, False], size=half_n_rows, p=[0.8, 0.2])
         bool_col_no_systemic = np.random.choice([True, False], size=half_n_rows, p=[0.2, 0.8])
 
-        float_col_systemic = np.random.normal(50, 10, half_n_rows)
-        float_col_no_systemic = np.random.normal(20, 10, half_n_rows)
+        float_col_systemic = np.random.normal(50, 10, half_n_rows).astype(np.float32)
+        float_col_no_systemic = np.random.normal(20, 10, half_n_rows).astype(np.float32)
 
         cat_col_systemic = np.random.choice(self.categories, size=half_n_rows, p=np.random.dirichlet(np.ones(len(self.categories)), size=1)[0])
         cat_col_no_systemic = np.random.choice(self.categories, size=half_n_rows, p=np.random.dirichlet(np.ones(len(self.categories)), size=1)[0])
@@ -106,6 +106,7 @@ class ModelTraining:
 
 
 @dataclass
+@dataclass
 class DriftDetection:
     @staticmethod
     def ks_test(data1, data2):
@@ -129,6 +130,21 @@ class DriftDetection:
         q_x = np.where(p_x != 0, q_x, np.min(p_x[p_x > 0]))
         return np.sum(p_x * np.log(p_x / q_x)) * (x[1] - x[0])
 
+    @staticmethod
+    def calculate_psi_with_smoothing(expected, actual, buckets=10, axis=0, smoothing_value=0.001):
+        breakpoints = np.linspace(
+            np.min([np.min(expected), np.min(actual)]),
+            np.max([np.max(expected), np.max(actual)]),
+            num=buckets + 1
+        )
+        expected_counts = np.histogram(expected, breakpoints)[0] + smoothing_value
+        actual_counts = np.histogram(actual, breakpoints)[0] + smoothing_value
+
+        expected_percents = expected_counts / np.sum(expected_counts)
+        actual_percents = actual_counts / np.sum(actual_counts)
+
+        psi_value = np.sum((actual_percents - expected_percents) * np.log(actual_percents / expected_percents))
+        return psi_value
 
 # Example Usage
 categories = ["Loan", "Account", "Credit Card", "Mortgage", "Investment"]
@@ -161,3 +177,7 @@ ks_stat, ks_p = drift_det.ks_test(data['float_feature'], new_data['float_feature
 chi2_stat, chi2_p, _, _ = drift_det.chi_squared_test(data['bool_feature'], new_data['bool_feature'])
 print("KS Test for float_feature:", ks_stat, "P-Value:", ks_p)
 print("Chi-Squared Test for bool_feature:", chi2_stat, "P-Value:", chi2_p)
+
+# PSI Calculation for float_feature
+psi_float_feature = drift_det.calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
+print("PSI for float_feature:", psi_float_feature)
