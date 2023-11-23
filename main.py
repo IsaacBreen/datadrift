@@ -115,9 +115,11 @@ class FeatureEngineering:
         data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
         embedding_list = data[f'{feature}_cleaned'].apply(get_sentence_embedding).tolist()
 
-        # Creating separate columns for each dimension of the embedding
-        for i in range(w2v_model.vector_size):
-            data[f'{feature}_embedding_{i}'] = [embedding[i] for embedding in embedding_list]
+        # Creating a new DataFrame for embeddings
+        embeddings_df = pd.DataFrame(embedding_list, columns=[f'{feature}_embedding_{i}' for i in range(w2v_model.vector_size)])
+
+        # Concatenating the new DataFrame with the original data
+        data = pd.concat([data, embeddings_df], axis=1)
 
         return data
 
@@ -196,7 +198,7 @@ data = feat_eng.fit_transform(data)
 model_training = ModelTraining()
 
 # Define features based on transformed data
-features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_]]
+features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
 target = 'is_systemic_risk'
 
 X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0)
