@@ -53,44 +53,73 @@ class DataGenerator:
 
 @dataclass
 class FeatureEngineering:
-    categories: list
-    le: LabelEncoder = LabelEncoder()
-    tfidf: TfidfVectorizer = TfidfVectorizer(max_features=10)
-    word2vec_model: gensim.models.Word2Vec = None
+    # Assuming no initial parameters
+    text_features: list = None
+    categorical_features: list = None
+    numerical_features: list = None
+    label_encoders: dict = None
+    tfidf_vectorizers: dict = None
+    word2vec_models: dict = None
 
     def fit_transform(self, data):
-        self.le.fit(self.categories)
-        data['category_feature_encoded'] = self.le.transform(data['category_feature'])
-        tfidf_matrix = self.tfidf.fit_transform(data['verbatim_text']).toarray()
-        tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
-        data = pd.concat([data, tfidf_df], axis=1)
-        self.train_word2vec(data)
-        data = self.create_sentence_embeddings(data)
+        # Initialize dictionaries
+        self.label_encoders = {}
+        self.tfidf_vectorizers = {}
+        self.word2vec_models = {}
+
+        # Categorical features
+        for feature in self.categorical_features:
+            le = LabelEncoder()
+            data[f'{feature}_encoded'] = le.fit_transform(data[feature])
+            self.label_encoders[feature] = le
+
+        # Textual features
+        for feature in self.text_features:
+            # TF-IDF
+            tfidf = TfidfVectorizer(max_features=10)
+            tfidf_matrix = tfidf.fit_transform(data[feature]).toarray()
+            tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f'tfidf_{feature}_{i}' for i in range(tfidf_matrix.shape[1])])
+            data = pd.concat([data, tfidf_df], axis=1)
+            self.tfidf_vectorizers[feature] = tfidf
+
+            # Word2Vec
+            data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
+            w2v_model = gensim.models.Word2Vec(sentences=data[f'{feature}_cleaned'], vector_size=100, window=5, min_count=1, workers=4)
+            data = self.create_sentence_embeddings(data, feature, w2v_model)
+            self.word2vec_models[feature] = w2v_model
+
+        # Numerical features - can add any preprocessing if needed
         return data
 
     def transform(self, data):
-        data['category_feature_encoded'] = self.le.transform(data['category_feature'])
-        tfidf_matrix = self.tfidf.transform(data['verbatim_text']).toarray()
-        tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
-        data = pd.concat([data, tfidf_df], axis=1)
-        self.create_sentence_embeddings(data)
+        # Apply transformations to new data
+        for feature in self.categorical_features:
+            le = self.label_encoders[feature]
+            data[f'{feature}_encoded'] = le.transform(data[feature])
+
+        for feature in self.text_features:
+            tfidf = self.tfidf_vectorizers[feature]
+            tfidf_matrix = tfidf.transform(data[feature]).toarray()
+            tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f'tfidf_{feature}_{i}' for i in range(tfidf_matrix.shape[1])])
+            data = pd.concat([data, tfidf_df], axis=1)
+            w2v_model = self.word2vec_models[feature]
+            data = self.create_sentence_embeddings(data, feature, w2v_model)
+
         return data
 
-    def train_word2vec(self, data):
-        data['verbatim_cleaned'] = data['verbatim_text'].str.lower().apply(word_tokenize)
-        self.word2vec_model = gensim.models.Word2Vec(sentences=data['verbatim_cleaned'], vector_size=100, window=5, min_count=1, workers=4)
-
-    def create_sentence_embeddings(self, data):
+    def create_sentence_embeddings(self, data, feature, w2v_model):
         def get_sentence_embedding(sentence):
-            embeddings = [self.word2vec_model.wv[word] for word in sentence if word in self.word2vec_model.wv]
-            return np.mean(embeddings, axis=0) if embeddings else np.zeros(self.word2vec_model.vector_size)
+            embeddings = [w2v_model.wv[word] for word in sentence if word in w2v_model.wv]
+            return np.mean(embeddings, axis=0) if embeddings else np.zeros(w2v_model.vector_size)
 
-        data['verbatim_cleaned'] = data['verbatim_text'].str.lower().apply(word_tokenize)
-        data['verbatim_embedding'] = data['verbatim_cleaned'].apply(get_sentence_embedding)
-        embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
-        embeddings_df.columns = [f"embedding_{i}" for i in range(embeddings_df.shape[1])]
-        return pd.concat([data, embeddings_df], axis=1)
+        data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
+        embedding_list = data[f'{feature}_cleaned'].apply(get_sentence_embedding).tolist()
 
+        # Creating separate columns for each dimension of the embedding
+        for i in range(w2v_model.vector_size):
+            data[f'{feature}_embedding_{i}'] = [embedding[i] for embedding in embedding_list]
+
+        return data
 
 @dataclass
 class ModelTraining:
@@ -107,7 +136,6 @@ class ModelTraining:
 
 
 @dataclass
-@dataclass
 class DriftDetection:
     @staticmethod
     def ks_test(data1, data2):
@@ -115,7 +143,8 @@ class DriftDetection:
 
     @staticmethod
     def chi_squared_test(data1, data2):
-        return chi2_contingency(pd.crosstab(data1, data2))
+        contingency_table = pd.crosstab(data1, data2)
+        return chi2_contingency(contingency_table)
 
     @staticmethod
     def wasserstein_distance(data1, data2):
@@ -147,21 +176,27 @@ class DriftDetection:
         psi_value = np.sum((actual_percents - expected_percents) * np.log(actual_percents / expected_percents))
         return psi_value
 
-# Example Usage
-categories = ["Loan", "Account", "Credit Card", "Mortgage", "Investment"]
-category_type = pd.CategoricalDtype(categories=categories, ordered=True)
 
-# Data Generation
-data_gen = DataGenerator(n_rows=20, categories=categories, category_type=category_type)
+# Example Usage
+
+# Data Generation (assuming this is specific and remains as provided)
+data_gen = DataGenerator(n_rows=20, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
 data = data_gen.generate_data()
 
+# Define feature types
+text_features = ['verbatim_text']  # Update as per your data
+categorical_features = ['category_feature']  # Update as per your data
+numerical_features = ['float_feature']  # Update as per your data
+
 # Feature Engineering
-feat_eng = FeatureEngineering(categories=categories)
+feat_eng = FeatureEngineering(text_features=text_features, categorical_features=categorical_features, numerical_features=numerical_features)
 data = feat_eng.fit_transform(data)
 
 # Model Training
 model_training = ModelTraining()
-features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + [f"tfidf_{i}" for i in range(10)] + [f"embedding_{i}" for i in range(100)]
+
+# Define features based on transformed data
+features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_]]
 target = 'is_systemic_risk'
 
 X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0)
@@ -173,42 +208,46 @@ print("Model Accuracy:", model_training.evaluate(y_test, y_pred))
 new_data = data_gen.generate_data()
 new_data = feat_eng.transform(new_data)
 
-def drift_detection_report(data, new_data, drift_detector):
-    # Calculate drift metrics
-    ks_stat, ks_p = drift_detector.ks_test(data['float_feature'], new_data['float_feature'])
-    chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(data['bool_feature'], new_data['bool_feature'])
-    wasserstein_dist = drift_detector.wasserstein_distance(data['float_feature'], new_data['float_feature'])
-    kld = drift_detector.kld(data['float_feature'], new_data['float_feature'])
-    psi_float_feature = drift_detector.calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
+def drift_detection_report(original_data, new_data, drift_detector, feature_types):
+    report = []
 
-    # Define thresholds for interpretation
-    ks_threshold = 0.05
-    chi2_threshold = 0.05
-    wasserstein_threshold = 10
-    kld_threshold = 0.1
-    psi_threshold = 0.2
+    # Numerical Features Drift Detection
+    for feature in feature_types['numerical']:
+        ks_stat, ks_p = drift_detector.ks_test(original_data[feature], new_data[feature])
+        wasserstein_dist = drift_detector.wasserstein_distance(original_data[feature], new_data[feature])
+        kld = drift_detector.kld(original_data[feature], new_data[feature])
+        psi = drift_detector.calculate_psi_with_smoothing(original_data[feature], new_data[feature])
 
-    # Prepare a DataFrame for the report
-    drift_report = pd.DataFrame({
-        'Metric': ['KS Test', 'Chi-Squared Test', 'Wasserstein Distance', 'KLD', 'PSI'],
-        'Data Feature': ['float_feature', 'bool_feature', 'float_feature', 'float_feature', 'float_feature'],
-        'Value': [ks_stat, chi2_stat, wasserstein_dist, kld, psi_float_feature],
-        'P-Value': [ks_p if ks_p is not None else "N/A", chi2_p if chi2_p is not None else "N/A", "N/A", "N/A", "N/A"],
-        'Threshold': [ks_threshold, chi2_threshold, wasserstein_threshold, kld_threshold, psi_threshold],
-        'Drift': [
-            ks_stat > ks_threshold,
-            chi2_p < chi2_threshold if chi2_p is not None else False,
-            wasserstein_dist > wasserstein_threshold,
-            kld > kld_threshold,
-            psi_float_feature > psi_threshold
-        ]
-    })
+        report.append({
+            'Feature': feature,
+            'Type': 'Numerical',
+            'KS Statistic': ks_stat,
+            'KS P-Value': ks_p,
+            'Wasserstein Distance': wasserstein_dist,
+            'KLD': kld,
+            'PSI': psi
+        })
 
-    return drift_report
+    # Categorical Features Drift Detection
+    for feature in feature_types['categorical']:
+        chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(original_data[feature], new_data[feature])
+
+        report.append({
+            'Feature': feature,
+            'Type': 'Categorical',
+            'Chi-Squared Statistic': chi2_stat,
+            'Chi-Squared P-Value': chi2_p
+        })
+
+    # Textual Features Drift Detection - Can be complex and may require custom implementation
+    # for feature in feature_types['textual']:
+    #     Implement custom drift detection for textual features
+
+    return pd.DataFrame(report)
 
 if __name__ == "__main__":
     drift_det = DriftDetection()
-    drift_report = drift_detection_report(data, new_data, drift_det)
+    drift_report = drift_detection_report(data, new_data, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'textual': text_features})
 
     # Printing the Table
     print("\nDrift Detection Report Table:")
