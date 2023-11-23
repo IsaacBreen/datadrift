@@ -188,6 +188,7 @@ data = data_gen.generate_data()
 # Define feature types
 text_features = ['verbatim_text']  # Update as per your data
 categorical_features = ['category_feature']  # Update as per your data
+boolean_features = ['bool_feature']  # Update as per your data
 numerical_features = ['float_feature']  # Update as per your data
 
 # Feature Engineering
@@ -241,7 +242,18 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
             'Chi-Squared P-Value': chi2_p
         })
 
-    # Textual Features Drift Detection - Can be complex and may require custom implementation
+    # Boolean Features Drift Detection
+    for feature in feature_types.get('boolean', []):
+        chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(original_data[feature], new_data[feature])
+
+        report.append({
+            'Feature': feature,
+            'Type': 'Boolean',
+            'Chi-Squared Statistic': chi2_stat,
+            'Chi-Squared P-Value': chi2_p
+        })
+
+    # TODO: Textual Features Drift Detection - Can be complex and may require custom implementation
     # for feature in feature_types['textual']:
     #     Implement custom drift detection for textual features
 
@@ -249,7 +261,7 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
 
 if __name__ == "__main__":
     drift_det = DriftDetection()
-    drift_report = drift_detection_report(data, new_data, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'textual': text_features})
+    drift_report = drift_detection_report(data, new_data, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features})
 
     # Printing the Table
     print("\nDrift Detection Report Table:")
