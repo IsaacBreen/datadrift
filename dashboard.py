@@ -6,7 +6,7 @@ from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
 from sklearn.model_selection import train_test_split
 
-from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetection, drift_detection_report, colorize_p_values, humanize_column_names
+from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetection, drift_detection_report, colorize_p_values, humanize_column_names, metadata_data
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
@@ -78,55 +78,84 @@ drift_report = drift_detection_report(
 humanize_column_names(drift_report)
 colorize_p_values(drift_report)
 
-# Dash layout (Placeholder, will be expanded in subsequent steps)
+# Inside the Dash layout
+metadata_div = html.Div([
+    html.H3("Metadata"),
+    html.Ul([html.Li(f"{key}: {value}") for key, value in metadata_data.items()])
+])
+
+# Dash layout with integrated components
 app.layout = html.Div([
     html.H1("Data Analysis Dashboard"),
     dcc.Tabs(id="tabs", value='tab-model', children=[
         dcc.Tab(label='Model Analysis', value='tab-model'),
         dcc.Tab(label='Drift Detection', value='tab-drift'),
-        dcc.Graph(id='model_performance_graph'),  # Ensure this component is in the initial layout
-        dcc.Graph(id='feature_importance_graph'),  # Ensure this component is in the initial layout
-        dash_table.DataTable(id='drift_report_table'),  # Ensure this component is in the initial layout
     ]),
-    html.Div(id='tabs-content')
+    html.Div(id='tabs-content'),
+    # Components for Model Analysis tab
+    html.Div([
+        html.H3('Model Performance'),
+        dcc.Graph(id='model_performance_graph'),
+        html.H3('Feature Importance'),
+        dcc.Graph(id='feature_importance_graph'),
+    ], id='model-analysis-content', style={'display': 'none'}),  # Initially hidden
+    # Components for Drift Detection tab
+    html.Div([
+        html.H3('Drift Report'),
+        dash_table.DataTable(id='drift_report_table'),
+    ], id='drift-detection-content', style={'display': 'none'}),  # Initially hidden
+    # ... [rest of the layout]
 ])
 
+
 @app.callback(
-    dash.dependencies.Output('tabs-content', 'children'),
-    [dash.dependencies.Input('tabs', 'value')]
+    Output('tabs-content', 'children'),
+    [Input('tabs', 'value')]
 )
 def render_content(tab):
     if tab == 'tab-model':
         return html.Div([
             html.H3('Model Performance'),
-            dcc.Graph(id='model_performance_graph'),
+            dcc.Graph(id='model_performance_graph'),  # Placeholder for model performance graph
             html.H3('Feature Importance'),
-            dcc.Graph(id='feature_importance_graph'),
-            # Additional components for model analysis
+            dcc.Graph(id='feature_importance_graph'),  # Placeholder for feature importance graph
         ])
     elif tab == 'tab-drift':
         return html.Div([
             html.H3('Drift Report'),
-            dash_table.DataTable(id='drift_report_table'),
+            dash_table.DataTable(id='drift_report_table'),  # Placeholder for drift report table
             html.H3('Metadata'),
             html.Pre(id='metadata_text'),
-            # Additional components for drift detection
         ])
-    # Add more conditions for additional tabs
 
-# Callback for updating the drift detection table
+# In the callback function that updates the drift report table
 @app.callback(
     [Output('drift_report_table', 'data'),
-     Output('drift_report_table', 'columns')],
+     Output('drift_report_table', 'columns'),
+     Output('drift_report_table', 'style_data_conditional'),  # Add this line
+     Output('drift_report_table', 'tooltip_data')],  # Add this line
     [Input('tabs', 'value')]
 )
 def update_drift_report_table(tab):
     if tab == 'tab-drift':
-        # Assuming drift_report is a DataFrame containing the drift report
         drift_data = drift_report.to_dict('records')
         columns = [{"name": i, "id": i} for i in drift_report.columns]
-        return drift_data, columns
-    return [], []
+
+        # Conditional styling for P-values
+        style = [{
+            'if': {
+                'column_id': col,
+                'filter_query': f'{{{col}}} < 0.05'
+            },
+            'backgroundColor': '#FF4136',
+            'color': 'white'
+        } for col in ['K-S Test P-Value', 'Chi-Squared P-Value', 'Z Test P-Value']]
+
+        # Tooltips for additional context
+        tooltips = [{"header": col, "value": f"Tooltip for {col}"} for col in drift_report.columns]
+
+        return drift_data, columns, style, tooltips
+    return [], [], [], []
 
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
@@ -158,6 +187,19 @@ def update_feature_importance(tab):
         layout = go.Layout(title='Feature Importances')
         return {'data': [data], 'layout': layout}
     return {}
+
+# Callback for switching tabs
+@app.callback(
+    [Output('model-analysis-content', 'style'),
+     Output('drift-detection-content', 'style')],
+    [Input('tabs', 'value')]
+)
+def toggle_tab_content(tab):
+    if tab == 'tab-model':
+        return {'display': 'block'}, {'display': 'none'}
+    elif tab == 'tab-drift':
+        return {'display': 'none'}, {'display': 'block'}
+    return {'display': 'none'}, {'display': 'none'}
 
 if __name__ == '__main__':
     app.run_server(debug=True)
