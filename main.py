@@ -74,8 +74,7 @@ class FeatureEngineering:
         # Categorical features
         for feature in self.categorical_features:
             le = LabelEncoder()
-            le.fit(data[feature])
-            data[f'{feature}_encoded'] = le.transform(data[feature])
+            data[f'{feature}_encoded'] = le.fit_transform(data[feature])
             self.label_encoders[feature] = le
 
         # Textual features
@@ -95,7 +94,7 @@ class FeatureEngineering:
 
         # Process boolean features
         for feature in self.boolean_features:
-            data[feature] = data[feature].astype(int)  # Converting boolean to numeric (0/1)
+            data[feature] = data[feature].astype(int)
 
         # TODO: Numerical features - can add any preprocessing if needed
 
@@ -312,7 +311,7 @@ for line in metadata.split('\n'):
 
 def generate_example_drift_report():
     # Data Generation (assuming this is specific and remains as provided)
-    data_gen = DataGenerator(n_rows=20, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
+    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
     data = data_gen.generate_data()
 
     # Define feature types
@@ -334,11 +333,10 @@ def generate_example_drift_report():
     model_training = ModelTraining()
 
     # Define features based on transformed data
-    features = [col for col in data.columns if
-                data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
+    features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
     target = 'is_systemic_risk'
 
-    X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0)
+    X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
     model_training.train_model(X_train, y_train)
     y_pred = model_training.predict(X_test)
     print("Model Accuracy:", model_training.evaluate(y_test, y_pred))
