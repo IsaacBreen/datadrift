@@ -65,6 +65,7 @@ class FeatureEngineering:
         tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
         data = pd.concat([data, tfidf_df], axis=1)
         self.train_word2vec(data)
+        data = self.create_sentence_embeddings(data)
         return data
 
     def transform(self, data):
@@ -78,13 +79,13 @@ class FeatureEngineering:
     def train_word2vec(self, data):
         data['verbatim_cleaned'] = data['verbatim_text'].str.lower().apply(word_tokenize)
         self.word2vec_model = gensim.models.Word2Vec(sentences=data['verbatim_cleaned'], vector_size=100, window=5, min_count=1, workers=4)
-        self.create_sentence_embeddings(data)
 
     def create_sentence_embeddings(self, data):
         def get_sentence_embedding(sentence):
             embeddings = [self.word2vec_model.wv[word] for word in sentence if word in self.word2vec_model.wv]
             return np.mean(embeddings, axis=0) if embeddings else np.zeros(self.word2vec_model.vector_size)
 
+        data['verbatim_cleaned'] = data['verbatim_text'].str.lower().apply(word_tokenize)
         data['verbatim_embedding'] = data['verbatim_cleaned'].apply(get_sentence_embedding)
         embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
         embeddings_df.columns = [f"embedding_{i}" for i in range(embeddings_df.shape[1])]
@@ -162,6 +163,7 @@ data = feat_eng.fit_transform(data)
 model_training = ModelTraining()
 features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + [f"tfidf_{i}" for i in range(10)] + [f"embedding_{i}" for i in range(100)]
 target = 'is_systemic_risk'
+
 X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0)
 model_training.train_model(X_train, y_train)
 y_pred = model_training.predict(X_test)
