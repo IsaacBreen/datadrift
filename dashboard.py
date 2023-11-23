@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
 from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetection, drift_detection_report, colorize_p_values, humanize_column_names
