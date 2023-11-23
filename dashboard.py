@@ -13,7 +13,7 @@ from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetectio
 app = dash.Dash(__name__)
 
 # Data Generation (assuming this is specific and remains as provided)
-data_gen = DataGenerator(n_rows=20, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
+data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
 data = data_gen.generate_data()
 
 # Define feature types
@@ -35,10 +35,11 @@ data = feat_eng.fit_transform(data)
 model_training = ModelTraining()
 
 # Define features based on transformed data
-features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
+features = [col for col in data.columns if
+            data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
 target = 'is_systemic_risk'
 
-X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
 model_training.train_model(X_train, y_train)
 y_pred = model_training.predict(X_test)
 model_accuracy = accuracy_score(y_test, y_pred)
