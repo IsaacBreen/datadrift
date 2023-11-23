@@ -1,11 +1,13 @@
 import dash
 import numpy as np
-import pandas as pd
 from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
 from sklearn.model_selection import train_test_split
 
-from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetection, drift_detection_report, colorize_p_values, humanize_column_names, metadata_data
+from data import FeatureEngineering
+from data_generator import DataGenerator
+from drift import DriftDetection, drift_detection_report, humanize_column_names, colorize_p_values, metadata_data
+from train import Model
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
@@ -13,7 +15,6 @@ def generate_data():
     data_gen = DataGenerator(
         n_rows=100,
         categories=["A", "B", "C"],
-        category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True),
         p=0.3,
         loc1=10,
         loc2=20,
@@ -32,20 +33,19 @@ def generate_data():
         numerical_features=numerical_features
     )
     data = feat_eng.fit_transform(data)
-    model_training = ModelTraining()
+    model_training = Model()
     features = [col for col in data.columns if
                 data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
     target = 'is_systemic_risk'
 
     X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
-    model_training.train_model(X_train, y_train)
+    model_training.train(X_train, y_train)
     y_pred = model_training.predict(X_test)
     train_accuracy = model_training.evaluate(y_train, model_training.predict(X_train))
     test_accuracy = model_training.evaluate(y_test, y_pred)
     data_gen = DataGenerator(
         n_rows=100,
         categories=["A", "B", "C"],
-        category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True),
         p=0.4,
         loc1=15,
         loc2=20,

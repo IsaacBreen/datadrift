@@ -1,160 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
-import gensim
-import nltk
 import numpy as np
 import pandas as pd
-from nltk.tokenize import word_tokenize
 from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde, norm
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 from termcolor import colored
-from xgboost import XGBClassifier
 
-nltk.download('punkt')
-
-
-@dataclass
-class DataGenerator:
-    n_rows: int
-    categories: list
-    category_type: pd.CategoricalDtype
-    p: float
-    loc1: float
-    loc2: float
-    scale1: float
-    scale2: float
-
-    def generate_data(self):
-        half_n_rows = self.n_rows // 2
-        bool_col_systemic = np.random.choice([True, False], size=half_n_rows, p=[self.p, 1 - self.p])
-        bool_col_no_systemic = np.random.choice([True, False], size=half_n_rows, p=[1 - self.p, self.p])
-
-        float_col_systemic = np.random.normal(loc=self.loc1, scale=self.scale1, size=half_n_rows).astype(np.float32)
-        float_col_no_systemic = np.random.normal(loc=self.loc2, scale=self.scale2, size=half_n_rows).astype(np.float32)
-
-        dir1 = np.random.dirichlet(np.ones(len(self.categories)), size=1)[0]
-        dir2 = np.random.dirichlet(np.ones(len(self.categories)), size=1)[0]
-        cat_col_systemic = np.random.choice(self.categories, size=half_n_rows, p=dir1)
-        cat_col_no_systemic = np.random.choice(self.categories, size=half_n_rows, p=dir2)
-
-        data = pd.DataFrame({
-            "float_feature": np.concatenate([float_col_systemic, float_col_no_systemic]),
-            "bool_feature": np.concatenate([bool_col_systemic, bool_col_no_systemic]),
-            "category_feature": pd.Categorical(np.concatenate([cat_col_systemic, cat_col_no_systemic]), categories=self.categories, ordered=True),
-            "is_systemic_risk": np.array([True] * half_n_rows + [False] * half_n_rows)
-        })
-
-        data['verbatim_text'] = data['is_systemic_risk'].apply(self.generate_verbatim)
-        return data
-
-    def generate_verbatim(self, is_systemic):
-        p = self.p
-        if is_systemic:
-            p = 1 - p
-        return_systemic = np.random.choice([True, False], p=[p, 1 - p])
-
-        if return_systemic:
-            topics = ["security breach", "rate changes", "hidden fees", "misleading schemes", "service responsiveness"]
-        else:
-            topics = ["delayed response", "minor errors", "application processing", "terms clarification", "platform usability"]
-        issue = np.random.choice(topics)
-        return f"Customer complained about {issue}."
-
-
-@dataclass
-class FeatureEngineering:
-    text_features: list
-    categorical_features: list
-    numerical_features: list
-    boolean_features: list
-    label_encoders: Optional[dict] = None
-    tfidf_vectorizers: Optional[dict] = None
-    word2vec_models: Optional[dict] = None
-
-    def fit_transform(self, data):
-        # Initialize dictionaries
-        self.label_encoders = {}
-        self.tfidf_vectorizers = {}
-        self.word2vec_models = {}
-
-        # Categorical features
-        for feature in self.categorical_features:
-            le = LabelEncoder()
-            data[f'{feature}_encoded'] = le.fit_transform(data[feature])
-            self.label_encoders[feature] = le
-
-        # Textual features
-        for feature in self.text_features:
-            # TF-IDF
-            tfidf = TfidfVectorizer(max_features=10)
-            tfidf_matrix = tfidf.fit_transform(data[feature]).toarray()
-            tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f'tfidf_{feature}_{i}' for i in range(tfidf_matrix.shape[1])])
-            data = pd.concat([data, tfidf_df], axis=1)
-            self.tfidf_vectorizers[feature] = tfidf
-
-            # Word2Vec
-            data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
-            w2v_model = gensim.models.Word2Vec(sentences=data[f'{feature}_cleaned'], vector_size=100, window=5, min_count=1, workers=4)
-            data = self.create_sentence_embeddings(data, feature, w2v_model)
-            self.word2vec_models[feature] = w2v_model
-
-        # Process boolean features
-        for feature in self.boolean_features:
-            data[feature] = data[feature].astype(int)
-
-        # TODO: Numerical features - can add any preprocessing if needed
-
-        return data
-
-    def transform(self, data):
-        # Apply transformations to new data
-        for feature in self.categorical_features:
-            le = self.label_encoders[feature]
-            data[f'{feature}_encoded'] = le.transform(data[feature])
-
-        for feature in self.text_features:
-            tfidf = self.tfidf_vectorizers[feature]
-            tfidf_matrix = tfidf.transform(data[feature]).toarray()
-            tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f'tfidf_{feature}_{i}' for i in range(tfidf_matrix.shape[1])])
-            data = pd.concat([data, tfidf_df], axis=1)
-            w2v_model = self.word2vec_models[feature]
-            data = self.create_sentence_embeddings(data, feature, w2v_model)
-
-        # Process boolean features in new data
-        for feature in self.boolean_features:
-            data[feature] = data[feature].astype(int)
-
-        return data
-
-    def create_sentence_embeddings(self, data, feature, w2v_model):
-        def get_sentence_embedding(sentence):
-            embeddings = [w2v_model.wv[word] for word in sentence if word in w2v_model.wv]
-            return np.mean(embeddings, axis=0) if embeddings else np.zeros(w2v_model.vector_size)
-        data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
-        embedding_list = data[f'{feature}_cleaned'].apply(get_sentence_embedding).tolist()
-        embeddings_df = pd.DataFrame(embedding_list, columns=[f'{feature}_embedding_{i}' for i in range(w2v_model.vector_size)])
-        data = pd.concat([data, embeddings_df], axis=1)
-        return data
-
-@dataclass
-class ModelTraining:
-    model: XGBClassifier = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-
-    def train_model(self, X_train, y_train):
-        self.model.fit(X_train, y_train)
-
-    def predict(self, X):
-        return self.model.predict(X)
-
-    def evaluate(self, y_true, y_pred):
-        return accuracy_score(y_true, y_pred)
-
+from data import FeatureEngineering
+from data_generator import DataGenerator
+from train import Model
 
 @dataclass
 class DriftDetection:
@@ -205,8 +61,6 @@ class DriftDetection:
         z_statistic = (proportion1 - proportion2) / np.sqrt(proportion * (1 - proportion) * (1 / nobs1 + 1 / nobs2))
         p_value = norm.sf(abs(z_statistic)) * 2  # Two-tailed test
         return z_statistic, p_value
-
-
 def drift_detection_report(original_data, new_data, drift_detector, feature_types):
     report = []
 
@@ -262,7 +116,6 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
     #     Implement custom drift detection for textual features
 
     return pd.DataFrame(report)
-
 def humanize_column_names(drift_report):
     # Renaming columns for clarity
     column_renames = {
@@ -277,7 +130,6 @@ def humanize_column_names(drift_report):
         'Z P-Value':             'Z Test P-Value'
     }
     drift_report.rename(columns=column_renames, inplace=True)
-
 def colorize_p_values(drift_report):
     def _colorize_p_value(value):
         if value < 0.01:
@@ -291,7 +143,6 @@ def colorize_p_values(drift_report):
     p_value_columns = [col for col in drift_report.columns if 'P-Value' in col]
     for col in p_value_columns:
         drift_report[col] = drift_report[col].apply(_colorize_p_value)
-
 def generate_conclusions(drift_report):
     def drift_detected(p_value):
         return 'Yes' if p_value < 0.05 else 'No'
@@ -303,8 +154,6 @@ def generate_conclusions(drift_report):
         conclusions[col] = drift_report[col].apply(lambda x: drift_detected(float(x)))
 
     return conclusions
-
-# A description for each metric
 metadata = """
 Kolmogorov-Smirnov Test: Measures the maximum distance between two distributions.
 K-S Test P-Value: Probability of observing the data if the null hypothesis of no drift is true. Lower values suggest drift.
@@ -317,11 +166,9 @@ Z Test Statistic & P-Value: Used for hypothesis testing in boolean features.
 """
 metadata_data = {line.split(":")[0].strip(): line.split(":")[1].strip()
                  for line in metadata.split('\n') if line}
-
-
 def generate_example_drift_report():
     # Data Generation (assuming this is specific and remains as provided)
-    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True), p=0.3, loc1=10, loc2=20, scale1=10, scale2=10)
+    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.3, loc1=10, loc2=20, scale1=10, scale2=10)
     data = data_gen.generate_data()
 
     # Define feature types
@@ -340,20 +187,20 @@ def generate_example_drift_report():
     data = feat_eng.fit_transform(data)
 
     # Model Training
-    model_training = ModelTraining()
+    model_training = Model()
 
     # Define features based on transformed data
     features = [col for col in data.columns if data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
     target = 'is_systemic_risk'
 
     X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
-    model_training.train_model(X_train, y_train)
+    model_training.train(X_train, y_train)
     y_pred = model_training.predict(X_test)
     model_accuracy = model_training.evaluate(y_test, y_pred)
     print("Model Accuracy:", model_accuracy)
 
     # New Data for Drift Detection
-    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True), p=0.4, loc1=15, loc2=20, scale1=10, scale2=10)
+    data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.4, loc1=15, loc2=20, scale1=10, scale2=10)
     new_data = data_gen.generate_data()
     new_data = feat_eng.transform(new_data)
 
@@ -364,6 +211,7 @@ def generate_example_drift_report():
     colorize_p_values(drift_report)
 
     return drift_report
+
 
 if __name__ == "__main__":
     drift_report = generate_example_drift_report()
