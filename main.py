@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
@@ -9,6 +11,7 @@ from sklearn.metrics import accuracy_score
 from nltk.tokenize import word_tokenize
 import gensim
 from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde
+import seaborn as sns
 
 # Ensure NLTK punkt is downloaded
 import nltk
@@ -173,15 +176,53 @@ print("Model Accuracy:", model_training.evaluate(y_test, y_pred))
 new_data = data_gen.generate_data()
 new_data = feat_eng.transform(new_data)
 
-# Drift Detection
+def drift_detection_report(data, new_data, drift_detector):
+    """
+    Generate a drift detection report with visualizations and interpretations.
+    """
+    # Calculate drift metrics
+    ks_stat, ks_p = drift_detector.ks_test(data['float_feature'], new_data['float_feature'])
+    chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(data['bool_feature'], new_data['bool_feature'])
+    wasserstein_dist = drift_detector.wasserstein_distance(data['float_feature'], new_data['float_feature'])
+    kld = drift_detector.kld(data['float_feature'], new_data['float_feature'])
+    psi_float_feature = drift_detector.calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
+
+    # Define thresholds for interpretation (these are arbitrary and should be adjusted based on domain knowledge)
+    ks_threshold = 0.05
+    chi2_threshold = 0.05
+    wasserstein_threshold = 10
+    kld_threshold = 0.1
+    psi_threshold = 0.2
+
+    # Prepare a DataFrame for visualization
+    metrics = ['KS Test', 'Chi-Squared Test', 'Wasserstein Distance', 'KLD', 'PSI']
+    values = [ks_stat, chi2_stat, wasserstein_dist, kld, psi_float_feature]
+    p_values = [ks_p, chi2_p, None, None, None]
+    thresholds = [ks_threshold, chi2_threshold, wasserstein_threshold, kld_threshold, psi_threshold]
+    interpretations = ['Drift Detected' if (val > threshold or (metric == 'Chi-Squared Test' and p_val < threshold)) else 'No Drift' for metric, val, p_val, threshold in zip(metrics, values, p_values, thresholds)]
+
+    drift_report = pd.DataFrame({
+        'Metric': metrics,
+        'Value': values,
+        'P-Value': p_values,
+        'Threshold': thresholds,
+        'Interpretation': interpretations
+    })
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='Metric', y='Value', hue='Interpretation', data=drift_report, palette='viridis')
+    plt.axhline(ks_threshold, color='red', linestyle='--', label='KS Threshold')
+    plt.axhline(chi2_threshold, color='blue', linestyle='--', label='Chi2 Threshold')
+    plt.axhline(wasserstein_threshold, color='green', linestyle='--', label='Wasserstein Threshold')
+    plt.axhline(kld_threshold, color='purple', linestyle='--', label='KLD Threshold')
+    plt.axhline(psi_threshold, color='orange', linestyle='--', label='PSI Threshold')
+    plt.title('Data Drift Detection Report')
+    plt.legend()
+    plt.show()
+
+    return drift_report
+
 drift_det = DriftDetection()
-ks_stat, ks_p = drift_det.ks_test(data['float_feature'], new_data['float_feature'])
-chi2_stat, chi2_p, _, _ = drift_det.chi_squared_test(data['bool_feature'], new_data['bool_feature'])
-wasserstein_dist = drift_det.wasserstein_distance(data['float_feature'], new_data['float_feature'])
-kld = drift_det.kld(data['float_feature'], new_data['float_feature'])
-psi_float_feature = drift_det.calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
-print("KS Test for float_feature:", ks_stat, "P-Value:", ks_p)
-print("Chi-Squared Test for bool_feature:", chi2_stat, "P-Value:", chi2_p)
-print("Wasserstein Distance for float_feature:", wasserstein_dist)
-print("KLD for float_feature:", kld)
-print("PSI for float_feature:", psi_float_feature)
+report = drift_detection_report(data, new_data, drift_det)
+report
