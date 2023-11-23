@@ -133,6 +133,9 @@ new_float_col_no_systemic = np.random.normal(30, 15, n_rows//2)
 new_cat_col_systemic = np.random.choice(categories, size=n_rows//2, p=np.random.dirichlet(np.ones(len(categories)), size=1)[0])
 new_cat_col_no_systemic = np.random.choice(categories, size=n_rows//2, p=np.random.dirichlet(np.ones(len(categories)), size=1)[0])
 
+new_float_col_systemic = np.array(new_float_col_systemic, dtype=float)
+new_float_col_no_systemic = np.array(new_float_col_no_systemic, dtype=float)
+
 # Creating the new DataFrame
 new_data = pd.DataFrame({
     "float_feature": np.concatenate([new_float_col_systemic, new_float_col_no_systemic]),
