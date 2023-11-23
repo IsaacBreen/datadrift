@@ -252,7 +252,7 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
 
     return pd.DataFrame(report)
 
-def humanize_column_names(column):
+def humanize_column_names(drift_report):
     # Renaming columns for clarity
     column_renames = {
         'KS Statistic':          'Kolmogorov-Smirnov Test',
@@ -310,9 +310,7 @@ for line in metadata.split('\n'):
         key, value = line.split(':')
         metadata_data[key.strip()] = value.strip()
 
-if __name__ == "__main__":
-    # Example Usage
-
+def generate_example_drift_report():
     # Data Generation (assuming this is specific and remains as provided)
     data_gen = DataGenerator(n_rows=20, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
     data = data_gen.generate_data()
@@ -351,8 +349,14 @@ if __name__ == "__main__":
 
     drift_det = DriftDetection()
     drift_report = drift_detection_report(data, new_data, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features})
+
     humanize_column_names(drift_report)
     colorize_p_values(drift_report)
+
+    return drift_report
+
+if __name__ == "__main__":
+    drift_report = generate_example_drift_report()
     conclusions = generate_conclusions(drift_report)
 
     # Printing the Table
