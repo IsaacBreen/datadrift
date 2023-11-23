@@ -13,7 +13,16 @@ from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetectio
 app = dash.Dash(__name__)
 
 # Data Generation (assuming this is specific and remains as provided)
-data_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True))
+data_gen = DataGenerator(
+    n_rows=100,
+    categories=["A", "B", "C"],
+    category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True),
+    p=0.3,
+    loc1=10,
+    loc2=20,
+    scale1=10,
+    scale2=10
+    )
 data = data_gen.generate_data()
 
 # Define feature types
@@ -42,9 +51,20 @@ target = 'is_systemic_risk'
 X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
 model_training.train_model(X_train, y_train)
 y_pred = model_training.predict(X_test)
-model_accuracy = accuracy_score(y_test, y_pred)
+model_accuracy = model_training.evaluate(y_test, y_pred)
+print("Model Accuracy:", model_accuracy)
 
 # New Data for Drift Detection
+data_gen = DataGenerator(
+    n_rows=100,
+    categories=["A", "B", "C"],
+    category_type=pd.CategoricalDtype(categories=["A", "B", "C"], ordered=True),
+    p=0.4,
+    loc1=15,
+    loc2=20,
+    scale1=10,
+    scale2=10
+    )
 new_data = data_gen.generate_data()
 new_data = feat_eng.transform(new_data)
 
