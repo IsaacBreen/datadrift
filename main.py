@@ -24,17 +24,24 @@ class DataGenerator:
     n_rows: int
     categories: list
     category_type: pd.CategoricalDtype
+    p: float = 0.3
+    loc1: float = 40
+    loc2: float = 50
+    scale1: float = 10
+    scale2: float = 10
 
     def generate_data(self):
         half_n_rows = self.n_rows // 2
-        bool_col_systemic = np.random.choice([True, False], size=half_n_rows, p=[0.8, 0.2])
-        bool_col_no_systemic = np.random.choice([True, False], size=half_n_rows, p=[0.2, 0.8])
+        bool_col_systemic = np.random.choice([True, False], size=half_n_rows, p=[self.p, 1 - self.p])
+        bool_col_no_systemic = np.random.choice([True, False], size=half_n_rows, p=[1 - self.p, self.p])
 
-        float_col_systemic = np.random.normal(50, 10, half_n_rows).astype(np.float32)
-        float_col_no_systemic = np.random.normal(20, 10, half_n_rows).astype(np.float32)
+        float_col_systemic = np.random.normal(loc=self.loc1, scale=self.scale1, size=half_n_rows).astype(np.float32)
+        float_col_no_systemic = np.random.normal(loc=self.loc2, scale=self.scale2, size=half_n_rows).astype(np.float32)
 
-        cat_col_systemic = np.random.choice(self.categories, size=half_n_rows, p=np.random.dirichlet(np.ones(len(self.categories)), size=1)[0])
-        cat_col_no_systemic = np.random.choice(self.categories, size=half_n_rows, p=np.random.dirichlet(np.ones(len(self.categories)), size=1)[0])
+        dir1 = np.random.dirichlet(np.ones(len(self.categories)), size=1)[0]
+        dir2 = np.random.dirichlet(np.ones(len(self.categories)), size=1)[0]
+        cat_col_systemic = np.random.choice(self.categories, size=half_n_rows, p=dir1)
+        cat_col_no_systemic = np.random.choice(self.categories, size=half_n_rows, p=dir2)
 
         data = pd.DataFrame({
             "float_feature": np.concatenate([float_col_systemic, float_col_no_systemic]),
@@ -47,7 +54,9 @@ class DataGenerator:
         return data
 
     def generate_verbatim(self, is_systemic):
-        p = 0.8 if is_systemic else 0.2
+        p = self.p
+        if is_systemic:
+            p = 1 - p
         return_systemic = np.random.choice([True, False], p=[p, 1 - p])
 
         if return_systemic:
@@ -55,7 +64,7 @@ class DataGenerator:
         else:
             topics = ["delayed response", "minor errors", "application processing", "terms clarification", "platform usability"]
         issue = np.random.choice(topics)
-        return f"Systemic Risk: Major issue with {issue}. Detailed investigation required." if is_systemic else f"Non-Systemic: Concerns about {issue}. Standard follow-up suggested."
+        return f"Customer complained about {issue}."
 
 
 @dataclass
