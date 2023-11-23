@@ -177,9 +177,6 @@ new_data = data_gen.generate_data()
 new_data = feat_eng.transform(new_data)
 
 def drift_detection_report(data, new_data, drift_detector):
-    """
-    Generate a drift detection report with visualizations and interpretations.
-    """
     # Calculate drift metrics
     ks_stat, ks_p = drift_detector.ks_test(data['float_feature'], new_data['float_feature'])
     chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(data['bool_feature'], new_data['bool_feature'])
@@ -210,24 +207,12 @@ def drift_detection_report(data, new_data, drift_detector):
         ]
     })
 
-    # Printing the Table
-    print("\nDrift Detection Report Table:")
-    print(drift_report.to_string(index=False))
-
-    # Plotting
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x='Metric', y='Value', hue='Drift', data=drift_report, palette='viridis')
-    plt.axhline(ks_threshold, color='red', linestyle='--', label='KS Threshold')
-    plt.axhline(chi2_threshold, color='blue', linestyle='--', label='Chi2 Threshold')
-    plt.axhline(wasserstein_threshold, color='green', linestyle='--', label='Wasserstein Threshold')
-    plt.axhline(kld_threshold, color='purple', linestyle='--', label='KLD Threshold')
-    plt.axhline(psi_threshold, color='orange', linestyle='--', label='PSI Threshold')
-    plt.title('Data Drift Detection Report')
-    plt.legend()
-    plt.show()
-
     return drift_report
 
 if __name__ == "__main__":
     drift_det = DriftDetection()
-    report = drift_detection_report(data, new_data, drift_det)
+    drift_report = drift_detection_report(data, new_data, drift_det)
+
+    # Printing the Table
+    print("\nDrift Detection Report Table:")
+    print(drift_report.to_string(index=False))
