@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Optional
 
 import gensim
 import nltk
 import numpy as np
 import pandas as pd
 from nltk.tokenize import word_tokenize
-from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde
+from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussian_kde, norm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
@@ -54,13 +57,13 @@ class DataGenerator:
 @dataclass
 class FeatureEngineering:
     # Assuming no initial parameters
-    text_features: list = None
-    categorical_features: list = None
-    numerical_features: list = None
-    boolean_features: list = None
-    label_encoders: dict = None
-    tfidf_vectorizers: dict = None
-    word2vec_models: dict = None
+    text_features: list
+    categorical_features: list
+    numerical_features: list
+    boolean_features: list
+    label_encoders: Optional[dict] = None
+    tfidf_vectorizers: Optional[dict] = None
+    word2vec_models: Optional[dict] = None
 
     def fit_transform(self, data):
         # Initialize dictionaries
@@ -188,6 +191,15 @@ class DriftDetection:
         psi_value = np.sum((actual_percents - expected_percents) * np.log(actual_percents / expected_percents))
         return psi_value
 
+    @staticmethod
+    def two_proportions_z_test(count1, nobs1, count2, nobs2):
+        proportion1 = count1 / nobs1
+        proportion2 = count2 / nobs2
+        proportion = (count1 + count2) / (nobs1 + nobs2)
+        z_statistic = (proportion1 - proportion2) / np.sqrt(proportion * (1 - proportion) * (1 / nobs1 + 1 / nobs2))
+        p_value = norm.sf(abs(z_statistic)) * 2  # Two-tailed test
+        return z_statistic, p_value
+
 
 # Example Usage
 
@@ -202,7 +214,7 @@ boolean_features = ['bool_feature']  # Update as per your data
 numerical_features = ['float_feature']  # Update as per your data
 
 # Feature Engineering
-feat_eng = FeatureEngineering(text_features=text_features, categorical_features=categorical_features, numerical_features=numerical_features)
+feat_eng = FeatureEngineering(text_features=text_features, categorical_features=categorical_features, boolean_features=boolean_features, numerical_features=numerical_features)
 data = feat_eng.fit_transform(data)
 
 # Model Training
@@ -256,11 +268,19 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
     for feature in feature_types.get('boolean', []):
         chi2_stat, chi2_p, _, _ = drift_detector.chi_squared_test(original_data[feature], new_data[feature])
 
+        count1 = original_data[feature].sum()
+        nobs1 = len(original_data[feature])
+        count2 = new_data[feature].sum()
+        nobs2 = len(new_data[feature])
+        z_stat, p_value = drift_detector.two_proportions_z_test(count1, nobs1, count2, nobs2)
+
         report.append({
             'Feature': feature,
             'Type': 'Boolean',
             'Chi-Squared Statistic': chi2_stat,
-            'Chi-Squared P-Value': chi2_p
+            'Chi-Squared P-Value': chi2_p,
+            'Z-Statistic': z_stat,
+            'Z P-Value': p_value
         })
 
     # TODO: Textual Features Drift Detection - Can be complex and may require custom implementation
