@@ -57,6 +57,7 @@ class FeatureEngineering:
     text_features: list = None
     categorical_features: list = None
     numerical_features: list = None
+    boolean_features: list = None
     label_encoders: dict = None
     tfidf_vectorizers: dict = None
     word2vec_models: dict = None
@@ -88,7 +89,12 @@ class FeatureEngineering:
             data = self.create_sentence_embeddings(data, feature, w2v_model)
             self.word2vec_models[feature] = w2v_model
 
-        # Numerical features - can add any preprocessing if needed
+        # Process boolean features
+        for feature in self.boolean_features:
+            data[feature] = data[feature].astype(int)  # Converting boolean to numeric (0/1)
+
+        # TODO: Numerical features - can add any preprocessing if needed
+
         return data
 
     def transform(self, data):
@@ -104,6 +110,10 @@ class FeatureEngineering:
             data = pd.concat([data, tfidf_df], axis=1)
             w2v_model = self.word2vec_models[feature]
             data = self.create_sentence_embeddings(data, feature, w2v_model)
+
+        # Process boolean features in new data
+        for feature in self.boolean_features:
+            data[feature] = data[feature].astype(int)
 
         return data
 
