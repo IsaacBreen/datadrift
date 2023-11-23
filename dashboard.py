@@ -37,8 +37,8 @@ target = 'is_systemic_risk'
 X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
 model_training.train_model(X_train, y_train)
 y_pred = model_training.predict(X_test)
-model_accuracy = model_training.evaluate(y_test, y_pred)
-print("Model Accuracy:", model_accuracy)
+train_accuracy = model_training.evaluate(y_train, model_training.predict(X_train))
+test_accuracy = model_training.evaluate(y_test, y_pred)
 data_gen = DataGenerator(
     n_rows=100,
     categories=["A", "B", "C"],
@@ -62,42 +62,48 @@ drift_report = drift_detection_report(
 
 humanize_column_names(drift_report)
 colorize_p_values(drift_report)
+
+def evaluate_on_new_datasets(model_training, datasets, features):
+    results = {}
+    for name, new_data in datasets.items():
+        new_data = feat_eng.transform(new_data)  # Ensure the new data is transformed using the same feature engineering
+        X_new = new_data[features]
+        y_new_pred = model_training.predict(X_new)
+        # Assuming the ground truth labels are available in the new datasets
+        y_new_true = new_data['is_systemic_risk']
+        accuracy = model_training.evaluate(y_new_true, y_new_pred)
+        results[name] = accuracy
+    return results
+
+new_datasets = {'new_dataset1': data_gen.generate_data(), 'new_dataset2': data_gen.generate_data()}
+new_data_results = evaluate_on_new_datasets(model_training, new_datasets, features)
+
 metadata_div = html.Div([
     html.H3("Metadata"),
     html.Ul([html.Li(f"{key}: {value}") for key, value in metadata_data.items()])
 ])
 
+# Define the initial layout
 app.layout = html.Div([
-    html.H1('Model Analysis Dashboard'),
-    html.Div([
-        html.Div([
-            html.H3('Model Analysis'),
-            dcc.Tabs(id='tabs', value='tab-model', children=[
-                dcc.Tab(label='Model Analysis', value='tab-model'),
-                dcc.Tab(label='Drift Detection', value='tab-drift'),
-            ]),
-            html.Div(id='tabs-content'),
-        ], className='six columns', id='model-analysis-content'),
-        html.Div([
-            html.H3('Drift Detection'),
-            dcc.Graph(id='drift_detection_graph'),
-            metadata_div,
-        ], className='six columns', id='drift-detection-content'),
-    ], className='row'),
-    
-    # Placeholder for Model Performance Graph
-    dcc.Graph(id='model_performance_graph', figure={}),
-
-    # Placeholder for Feature Importance Graph
-    dcc.Graph(id='feature_importance_graph', figure={}),
-
-    # Placeholder for Drift Report Table
-    dash_table.DataTable(
-        id='drift_report_table',
-        columns=[{"name": "", "id": ""}],  # Empty initial columns
-        data=[],  # Empty initial data
-    ),
-], className='container')
+    html.H1("Drift Detection Dashboard"),
+    dcc.Tabs(id='tabs', value='tab-model', children=[
+        dcc.Tab(label='Model Analysis', value='tab-model'),
+        dcc.Tab(label='Drift Detection', value='tab-drift'),
+    ]),
+    html.Div(id='tabs-content'),
+    html.Div(id='model-analysis-content', children=[
+        html.H3('Model Performance'),
+        dcc.Graph(id='model_performance_graph'),
+        html.H3('Feature Importance'),
+        dcc.Graph(id='feature_importance_graph')  # Placeholder Graph
+    ]),
+    html.Div(id='drift-detection-content', children=[
+        html.H3('Drift Report'),
+        dash_table.DataTable(id='drift_report_table'),
+        html.H3('Metadata'),
+        html.Pre(id='metadata_text')
+    ])
+])
 
 @app.callback(
     Output('tabs-content', 'children'),
@@ -109,15 +115,16 @@ def render_content(tab):
             html.H3('Model Performance'),
             dcc.Graph(id='model_performance_graph'),
             html.H3('Feature Importance'),
-            dcc.Graph(id='feature_importance_graph'),
+            dcc.Graph(id='feature_importance_graph')  # Placeholder Graph
         ])
     elif tab == 'tab-drift':
         return html.Div([
             html.H3('Drift Report'),
             dash_table.DataTable(id='drift_report_table'),
             html.H3('Metadata'),
-            html.Pre(id='metadata_text'),
+            html.Pre(id='metadata_text')
         ])
+
 @app.callback(
     [Output('drift_report_table', 'data'),
      Output('drift_report_table', 'columns'),
@@ -142,16 +149,21 @@ def update_drift_report_table(tab):
 
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
+
+# Graph for Model Performance on New Datasets
 @app.callback(
     Output('model_performance_graph', 'figure'),
     [Input('tabs', 'value')]
 )
-def update_model_performance(tab):
+def update_model_performance_graph(tab):
     if tab == 'tab-model':
-        data = go.Bar(x=['Model Accuracy'], y=[model_accuracy])
-        layout = go.Layout(title='Model Performance')
+        datasets = ['Train', 'Test'] + list(new_data_results.keys())
+        accuracies = [train_accuracy, test_accuracy] + list(new_data_results.values())
+        data = go.Bar(x=datasets, y=accuracies)
+        layout = go.Layout(title='Model Performance on Various Datasets')
         return {'data': [data], 'layout': layout}
     return {}
+
 @app.callback(
     Output('feature_importance_graph', 'figure'),
     [Input('tabs', 'value')]
