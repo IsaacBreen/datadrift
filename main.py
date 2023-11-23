@@ -75,7 +75,8 @@ class FeatureEngineering:
         # Categorical features
         for feature in self.categorical_features:
             le = LabelEncoder()
-            data[f'{feature}_encoded'] = le.fit_transform(data[feature])
+            le.fit(data[feature])
+            data[f'{feature}_encoded'] = le.transform(data[feature])
             self.label_encoders[feature] = le
 
         # Textual features
