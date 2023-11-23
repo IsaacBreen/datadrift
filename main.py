@@ -87,9 +87,18 @@ data['verbatim_embedding'] = data['verbatim_cleaned'].apply(lambda x: get_senten
 # Step 4: Prepare the Dataset
 # Convert the list of embeddings into a DataFrame
 embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
+embeddings_df.columns = [f"embedding_{i}" for i in range(embeddings_df.shape[1])]
+
+# Debugging: Check the shape and columns of embeddings_df
+print("Embeddings DataFrame shape:", embeddings_df.shape)
+print("Embeddings DataFrame columns:", embeddings_df.columns)
 
 # Combining the sentence embeddings with the other features
 data_combined = pd.concat([data, tfidf_df, embeddings_df], axis=1)
+
+# Debugging: Inspect the combined DataFrame
+print("Combined DataFrame shape:", data_combined.shape)
+print("Combined DataFrame columns:", data_combined.columns)
 
 # Defining the feature columns and the target column
 features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + [f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])] + [f"embedding_{i}" for i in range(embeddings_df.shape[1])]
@@ -152,6 +161,10 @@ new_data['verbatim_embedding'] = new_data['verbatim_cleaned'].apply(lambda x: ge
 # Convert the list of embeddings into a DataFrame
 new_embeddings_df = pd.DataFrame(new_data['verbatim_embedding'].tolist())
 
+# Rename the columns of the new embeddings DataFrame
+new_embeddings_df.columns = [f"embedding_{i}" for i in range(new_embeddings_df.shape[1])]
+
+# Combine the data for the new dataset
 new_data_combined = pd.concat([new_data, new_tfidf_df, new_embeddings_df], axis=1)
 
 # Extracting features for the new data
