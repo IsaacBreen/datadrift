@@ -6,6 +6,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score
+from nltk.tokenize import word_tokenize
+import gensim
 
 # Set seed for reproducibility
 np.random.seed(0)
@@ -60,6 +62,28 @@ data['category_feature_encoded'] = le.transform(data['category_feature'])
 # Encoding the verbatim text column using TF-IDF
 tfidf_matrix = tfidf.fit_transform(data['verbatim_text']).toarray()
 tfidf_df = pd.DataFrame(tfidf_matrix, columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
+
+# Generating sentence embeddings for the verbatim text column using Word2Vec
+# Step 1: Preprocess Text Data (Basic)
+data['verbatim_cleaned'] = data['verbatim_text'].str.lower()
+data['verbatim_cleaned'] = data['verbatim_cleaned'].apply(word_tokenize)
+
+# Step 2: Train Word2Vec Model
+word2vec_model = gensim.models.Word2Vec(sentences=data['verbatim_cleaned'], vector_size=100, window=5, min_count=1, workers=4)
+
+# Step 3: Create Sentence Embeddings
+def get_sentence_embedding(sentence, model):
+    embeddings = [model.wv[word] for word in sentence if word in model.wv]
+    if embeddings:
+        return np.mean(embeddings, axis=0)
+    else:
+        return np.zeros(model.vector_size)
+
+data['verbatim_embedding'] = data['verbatim_cleaned'].apply(lambda x: get_sentence_embedding(x, word2vec_model))
+
+# Step 4: Prepare the Dataset
+# Convert the list of embeddings into a DataFrame
+embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
 
 # Combining the encoded features with the original data
 data_combined = pd.concat([data, tfidf_df], axis=1)
@@ -124,3 +148,89 @@ y_new_pred = xgb_model.predict(X_new)
 # Calculating the new accuracy
 new_accuracy = accuracy_score(y_new, y_new_pred)
 print("New Data Model Accuracy:", new_accuracy)
+
+
+from scipy.stats import ks_2samp, chi2_contingency
+
+# KS Test for the float_feature
+ks_statistic, ks_p_value = ks_2samp(data['float_feature'], new_data['float_feature'])
+print("KS Test for float_feature:")
+print("Statistic:", ks_statistic, "P-Value:", ks_p_value)
+
+# Preparing data for Chi-Squared Test for the bool_feature
+bool_feature_contingency = pd.crosstab(data['bool_feature'], new_data['bool_feature'])
+chi2_stat_bool, chi2_p_bool, _, _ = chi2_contingency(bool_feature_contingency)
+print("\nChi-Squared Test for bool_feature:")
+print("Statistic:", chi2_stat_bool, "P-Value:", chi2_p_bool)
+
+# Preparing data for Chi-Squared Test for the category_feature
+category_feature_contingency = pd.crosstab(data['category_feature'], new_data['category_feature'])
+chi2_stat_cat, chi2_p_cat, _, _ = chi2_contingency(category_feature_contingency)
+print("\nChi-Squared Test for category_feature:")
+print("Statistic:", chi2_stat_cat, "P-Value:", chi2_p_cat)
+
+
+def calculate_psi_with_smoothing(expected, actual, buckets=10, axis=0, smoothing_value=0.001):
+    """Calculate the PSI for a single variable with smoothing to handle zero values.
+
+    Args:
+        expected (array-like): The original data (expected distribution).
+        actual (array-like): The new data (actual distribution).
+        buckets (int): The number of intervals to divide the data into.
+        axis (int): Axis along which the PSI is calculated.
+        smoothing_value (float): A small constant added to avoid division by zero.
+
+    Returns:
+        float: The PSI value.
+    """
+    # Bin the data
+    breakpoints = np.linspace(
+        np.min([np.min(expected), np.min(actual)]),
+        np.max([np.max(expected), np.max(actual)]),
+        num=buckets + 1
+        )
+    expected_counts = np.histogram(expected, breakpoints)[0] + smoothing_value
+    actual_counts = np.histogram(actual, breakpoints)[0] + smoothing_value
+
+    # Calculate PSI
+    expected_percents = expected_counts / np.sum(expected_counts)
+    actual_percents = actual_counts / np.sum(actual_counts)
+
+    psi_value = np.sum((actual_percents - expected_percents) * np.log(actual_percents / expected_percents))
+    return psi_value
+
+# Example: Calculating PSI for float_feature with smoothing
+psi_float_feature = calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
+print("PSI for float_feature:", psi_float_feature)
+
+
+from scipy.stats import wasserstein_distance
+
+# Example: Calculating Wasserstein Distance for the float_feature
+wasserstein_dist_float = wasserstein_distance(data['float_feature'], new_data['float_feature'])
+print("Wasserstein Distance for float_feature:", wasserstein_dist_float)
+
+
+from scipy.stats import gaussian_kde
+import numpy as np
+
+def calculate_kld(p_data, q_data):
+    # Estimate the density of both distributions
+    p_density = gaussian_kde(p_data)
+    q_density = gaussian_kde(q_data)
+
+    # Define the range over which to evaluate the densities
+    x = np.linspace(min(min(p_data), min(q_data)), max(max(p_data), max(q_data)), num=1000)
+    p_x = p_density(x)
+    q_x = q_density(x)
+
+    # Ensure that q_x is nonzero everywhere p_x is nonzero
+    q_x = np.where(p_x != 0, q_x, np.min(p_x[p_x > 0]))
+
+    # Calculate the KLD
+    kld = np.sum(p_x * np.log(p_x / q_x)) * (x[1] - x[0])
+    return kld
+
+# Example: Calculating KLD for float_feature
+kld_float_feature = calculate_kld(data['float_feature'], new_data['float_feature'])
+print("KLD for float_feature:", kld_float_feature)
