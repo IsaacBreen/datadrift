@@ -187,7 +187,7 @@ def drift_detection_report(data, new_data, drift_detector):
     kld = drift_detector.kld(data['float_feature'], new_data['float_feature'])
     psi_float_feature = drift_detector.calculate_psi_with_smoothing(data['float_feature'], new_data['float_feature'])
 
-    # Define thresholds for interpretation (these are arbitrary and should be adjusted based on domain knowledge)
+    # Define thresholds for interpretation
     ks_threshold = 0.05
     chi2_threshold = 0.05
     wasserstein_threshold = 10
@@ -202,12 +202,22 @@ def drift_detection_report(data, new_data, drift_detector):
     interpretations = ['Drift Detected' if (val > threshold or (metric == 'Chi-Squared Test' and p_val < threshold)) else 'No Drift' for metric, val, p_val, threshold in zip(metrics, values, p_values, thresholds)]
 
     drift_report = pd.DataFrame({
-        'Metric': metrics,
-        'Value': values,
-        'P-Value': p_values,
-        'Threshold': thresholds,
-        'Interpretation': interpretations
+        'Metric': ['KS Test', 'Chi-Squared Test', 'Wasserstein Distance', 'KLD', 'PSI'],
+        'Value': [ks_stat, chi2_stat, wasserstein_dist, kld, psi_float_feature],
+        'P-Value': [ks_p, chi2_p, None, None, None],
+        'Threshold': [ks_threshold, chi2_threshold, wasserstein_threshold, kld_threshold, psi_threshold],
+        'Interpretation': [
+            'Drift Detected' if (ks_stat > ks_threshold) else 'No Drift',
+            'Drift Detected' if (chi2_p < chi2_threshold) else 'No Drift',
+            'Drift Detected' if (wasserstein_dist > wasserstein_threshold) else 'No Drift',
+            'Drift Detected' if (kld > kld_threshold) else 'No Drift',
+            'Drift Detected' if (psi_float_feature > psi_threshold) else 'No Drift'
+        ]
     })
+
+    # Printing the Table
+    print("\nDrift Detection Report Table:")
+    print(drift_report.to_string(index=False))
 
     # Plotting
     plt.figure(figsize=(10, 6))
@@ -223,6 +233,6 @@ def drift_detection_report(data, new_data, drift_detector):
 
     return drift_report
 
-drift_det = DriftDetection()
-report = drift_detection_report(data, new_data, drift_det)
-report
+if __name__ == "__main__":
+    drift_det = DriftDetection()
+    report = drift_detection_report(data, new_data, drift_det)
