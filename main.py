@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termcolor import colored
 
 from dataclasses import dataclass
 from typing import Optional
@@ -289,10 +290,70 @@ def drift_detection_report(original_data, new_data, drift_detector, feature_type
 
     return pd.DataFrame(report)
 
+def humanize_column_names(column):
+    # Renaming columns for clarity
+    column_renames = {
+        'KS Statistic':          'Kolmogorov-Smirnov Test',
+        'KS P-Value':            'K-S Test P-Value',
+        'Chi-Squared Statistic': 'Chi-Squared Test',
+        'Chi-Squared P-Value':   'Chi-Squared P-Value',
+        'Wasserstein Distance':  'Wasserstein Distance',
+        'KLD':                   'Kullback-Leibler Divergence',
+        'PSI':                   'Population Stability Index',
+        'Z-Statistic':           'Z Test Statistic',
+        'Z P-Value':             'Z Test P-Value'
+    }
+    drift_report.rename(columns=column_renames, inplace=True)
+
+def colorize_p_values(drift_report):
+    def _colorize_p_value(value):
+        if value < 0.01:
+            return colored(f'{value:.3f}', 'red')
+        elif value < 0.05:
+            return colored(f'{value:.3f}', 'yellow')
+        else:
+            return colored(f'{value:.3f}', 'green')
+
+    # Color coding P-Values
+    p_value_columns = [col for col in drift_report.columns if 'P-Value' in col]
+    for col in p_value_columns:
+        drift_report[col] = drift_report[col].apply(_colorize_p_value)
+
+def generate_conclusions(drift_report):
+    def drift_detected(p_value):
+        return 'Yes' if p_value < 0.05 else 'No'
+
+    conclusions = pd.DataFrame()
+
+    p_value_columns = [col for col in drift_report.columns if 'P-Value' in col]
+    for col in p_value_columns:
+        conclusions[col] = drift_report[col].apply(lambda x: drift_detected(float(x)))
+
+    return conclusions
+
+# A description for each metric
+metadata = """
+Kolmogorov-Smirnov Test: Measures the maximum distance between two distributions.
+K-S Test P-Value: Probability of observing the data if the null hypothesis of no drift is true. Lower values suggest drift.
+Chi-Squared Test: Measures the difference between expected and observed frequencies in categorical data.
+Chi-Squared P-Value: Probability of observing the data under no drift in categorical features.
+Wasserstein Distance: Measures the distance between two probability distributions.
+Kullback-Leibler Divergence: Measures how one probability distribution diverges from a second, expected distribution.
+Population Stability Index: Measures the stability of a feature's distribution over time.
+Z Test Statistic & P-Value: Used for hypothesis testing in boolean features.
+"""
+
 if __name__ == "__main__":
     drift_det = DriftDetection()
     drift_report = drift_detection_report(data, new_data, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features})
+    humanize_column_names(drift_report)
+    colorize_p_values(drift_report)
+    conclusions = generate_conclusions(drift_report)
 
     # Printing the Table
     print("\nDrift Detection Report Table:")
     print(drift_report.to_string(index=False))
+    print("\nDrift detected?")
+    print(conclusions.to_string(index=False))
+    print("\nMetadata:")
+    print(metadata)
