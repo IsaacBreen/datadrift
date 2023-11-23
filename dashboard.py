@@ -1,4 +1,3 @@
-# Import necessary libraries
 import dash
 import numpy as np
 import pandas as pd
@@ -7,11 +6,7 @@ from dash.dependencies import Input, Output
 from sklearn.model_selection import train_test_split
 
 from main import DataGenerator, FeatureEngineering, ModelTraining, DriftDetection, drift_detection_report, colorize_p_values, humanize_column_names, metadata_data
-
-# Initialize the Dash app
 app = dash.Dash(__name__)
-
-# Data Generation (assuming this is specific and remains as provided)
 data_gen = DataGenerator(
     n_rows=100,
     categories=["A", "B", "C"],
@@ -23,14 +18,10 @@ data_gen = DataGenerator(
     scale2=10
     )
 data = data_gen.generate_data()
-
-# Define feature types
 text_features = ['verbatim_text']
 categorical_features = ['category_feature']
 boolean_features = ['bool_feature']
 numerical_features = ['float_feature']
-
-# Feature Engineering
 feat_eng = FeatureEngineering(
     text_features=text_features,
     categorical_features=categorical_features,
@@ -38,11 +29,7 @@ feat_eng = FeatureEngineering(
     numerical_features=numerical_features
 )
 data = feat_eng.fit_transform(data)
-
-# Model Training
 model_training = ModelTraining()
-
-# Define features based on transformed data
 features = [col for col in data.columns if
             data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
 target = 'is_systemic_risk'
@@ -52,8 +39,6 @@ model_training.train_model(X_train, y_train)
 y_pred = model_training.predict(X_test)
 model_accuracy = model_training.evaluate(y_test, y_pred)
 print("Model Accuracy:", model_accuracy)
-
-# New Data for Drift Detection
 data_gen = DataGenerator(
     n_rows=100,
     categories=["A", "B", "C"],
@@ -77,36 +62,29 @@ drift_report = drift_detection_report(
 
 humanize_column_names(drift_report)
 colorize_p_values(drift_report)
-
-# Inside the Dash layout
 metadata_div = html.Div([
     html.H3("Metadata"),
     html.Ul([html.Li(f"{key}: {value}") for key, value in metadata_data.items()])
 ])
 
-# Dash layout with integrated components
 app.layout = html.Div([
-    html.H1("Data Analysis Dashboard"),
-    dcc.Tabs(id="tabs", value='tab-model', children=[
-        dcc.Tab(label='Model Analysis', value='tab-model'),
-        dcc.Tab(label='Drift Detection', value='tab-drift'),
-    ]),
-    html.Div(id='tabs-content'),
-    # Components for Model Analysis tab
+    html.H1('Model Analysis Dashboard'),
     html.Div([
-        html.H3('Model Performance'),
-        dcc.Graph(id='model_performance_graph'),
-        html.H3('Feature Importance'),
-        dcc.Graph(id='feature_importance_graph'),
-    ], id='model-analysis-content', style={'display': 'none'}),  # Initially hidden
-    # Components for Drift Detection tab
-    html.Div([
-        html.H3('Drift Report'),
-        dash_table.DataTable(id='drift_report_table'),
-    ], id='drift-detection-content', style={'display': 'none'}),  # Initially hidden
-    # ... [rest of the layout]
-])
-
+        html.Div([
+            html.H3('Model Analysis'),
+            dcc.Tabs(id='tabs', value='tab-model', children=[
+                dcc.Tab(label='Model Analysis', value='tab-model'),
+                dcc.Tab(label='Drift Detection', value='tab-drift'),
+            ]),
+            html.Div(id='tabs-content'),
+        ], className='six columns', id='model-analysis-content'),
+        html.Div([
+            html.H3('Drift Detection'),
+            dcc.Graph(id='drift_detection_graph'),
+            metadata_div,
+        ], className='six columns', id='drift-detection-content'),
+    ], className='row'),
+], className='container')
 
 @app.callback(
     Output('tabs-content', 'children'),
@@ -116,32 +94,26 @@ def render_content(tab):
     if tab == 'tab-model':
         return html.Div([
             html.H3('Model Performance'),
-            dcc.Graph(id='model_performance_graph'),  # Placeholder for model performance graph
+            dcc.Graph(id='model_performance_graph'),
             html.H3('Feature Importance'),
-            dcc.Graph(id='feature_importance_graph'),  # Placeholder for feature importance graph
+            dcc.Graph(id='feature_importance_graph'),
         ])
     elif tab == 'tab-drift':
         return html.Div([
             html.H3('Drift Report'),
-            dash_table.DataTable(id='drift_report_table'),  # Placeholder for drift report table
+            dash_table.DataTable(id='drift_report_table'),
             html.H3('Metadata'),
             html.Pre(id='metadata_text'),
         ])
-
-# In the callback function that updates the drift report table
 @app.callback(
     [Output('drift_report_table', 'data'),
      Output('drift_report_table', 'columns'),
-     Output('drift_report_table', 'style_data_conditional'),  # Add this line
-     Output('drift_report_table', 'tooltip_data')],  # Add this line
-    [Input('tabs', 'value')]
+     Output('drift_report_table', 'style_data_conditional'),     Output('drift_report_table', 'tooltip_data')],    [Input('tabs', 'value')]
 )
 def update_drift_report_table(tab):
     if tab == 'tab-drift':
         drift_data = drift_report.to_dict('records')
         columns = [{"name": i, "id": i} for i in drift_report.columns]
-
-        # Conditional styling for P-values
         style = [{
             'if': {
                 'column_id': col,
@@ -150,8 +122,6 @@ def update_drift_report_table(tab):
             'backgroundColor': '#FF4136',
             'color': 'white'
         } for col in ['K-S Test P-Value', 'Chi-Squared P-Value', 'Z Test P-Value']]
-
-        # Tooltips for additional context
         tooltips = [{"header": col, "value": f"Tooltip for {col}"} for col in drift_report.columns]
 
         return drift_data, columns, style, tooltips
@@ -159,36 +129,28 @@ def update_drift_report_table(tab):
 
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
-
-# Callback for updating the model performance graph
 @app.callback(
     Output('model_performance_graph', 'figure'),
     [Input('tabs', 'value')]
 )
 def update_model_performance(tab):
     if tab == 'tab-model':
-        # Placeholder data for model performance
         data = go.Bar(x=['Model Accuracy'], y=[model_accuracy])
         layout = go.Layout(title='Model Performance')
         return {'data': [data], 'layout': layout}
     return {}
-
-# Callback for updating the feature importance graph
 @app.callback(
     Output('feature_importance_graph', 'figure'),
     [Input('tabs', 'value')]
 )
 def update_feature_importance(tab):
     if tab == 'tab-model':
-        # Assuming model_training.model is your trained model and it has feature_importances_
         feature_importances = model_training.model.feature_importances_
         features = X_train.columns
         data = go.Bar(x=features, y=feature_importances)
         layout = go.Layout(title='Feature Importances')
         return {'data': [data], 'layout': layout}
     return {}
-
-# Callback for switching tabs
 @app.callback(
     [Output('model-analysis-content', 'style'),
      Output('drift-detection-content', 'style')],
