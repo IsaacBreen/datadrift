@@ -85,12 +85,11 @@ data['verbatim_embedding'] = data['verbatim_cleaned'].apply(lambda x: get_senten
 # Convert the list of embeddings into a DataFrame
 embeddings_df = pd.DataFrame(data['verbatim_embedding'].tolist())
 
-# Combining the encoded features with the original data
-data_combined = pd.concat([data, tfidf_df], axis=1)
+# Combining the sentence embeddings with the other features
+data_combined = pd.concat([data, embeddings_df], axis=1)
 
 # Defining the feature columns and the target column
-features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + list(tfidf_df.columns)
-target = 'is_systemic_risk'
+features = ['float_feature', 'bool_feature', 'category_feature_encoded'] + list(embeddings_df.columns)
 
 # Splitting the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(data_combined[features], data_combined[target], test_size=0.2, random_state=0)
