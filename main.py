@@ -57,7 +57,6 @@ class DataGenerator:
 
 @dataclass
 class FeatureEngineering:
-    # Assuming no initial parameters
     text_features: list
     categorical_features: list
     numerical_features: list
@@ -126,16 +125,10 @@ class FeatureEngineering:
         def get_sentence_embedding(sentence):
             embeddings = [w2v_model.wv[word] for word in sentence if word in w2v_model.wv]
             return np.mean(embeddings, axis=0) if embeddings else np.zeros(w2v_model.vector_size)
-
         data[f'{feature}_cleaned'] = data[feature].str.lower().apply(word_tokenize)
         embedding_list = data[f'{feature}_cleaned'].apply(get_sentence_embedding).tolist()
-
-        # Creating a new DataFrame for embeddings
         embeddings_df = pd.DataFrame(embedding_list, columns=[f'{feature}_embedding_{i}' for i in range(w2v_model.vector_size)])
-
-        # Concatenating the new DataFrame with the original data
         data = pd.concat([data, embeddings_df], axis=1)
-
         return data
 
 @dataclass
@@ -210,10 +203,10 @@ data_gen = DataGenerator(n_rows=20, categories=["A", "B", "C"], category_type=pd
 data = data_gen.generate_data()
 
 # Define feature types
-text_features = ['verbatim_text']  # Update as per your data
-categorical_features = ['category_feature']  # Update as per your data
-boolean_features = ['bool_feature']  # Update as per your data
-numerical_features = ['float_feature']  # Update as per your data
+text_features = ['verbatim_text']
+categorical_features = ['category_feature']
+boolean_features = ['bool_feature']
+numerical_features = ['float_feature']
 
 # Feature Engineering
 feat_eng = FeatureEngineering(text_features=text_features, categorical_features=categorical_features, boolean_features=boolean_features, numerical_features=numerical_features)
