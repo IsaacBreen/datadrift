@@ -85,12 +85,6 @@ def generate_data():
 
 drift_report, train_accuracy, test_accuracy, model_training, X_train, X_test, y_train, y_test, new_data_results, data, new_data, features, drift_det, feat_eng = generate_data()
 
-
-metadata_div = html.Div([
-    html.H3("Metadata"),
-    html.Ul([html.Li(f"{key}: {value}") for key, value in metadata_data.items()])
-])
-
 # Define the initial layout
 app.layout = html.Div([
     html.H1("Drift Detection Dashboard"),
@@ -118,7 +112,7 @@ def render_content(tab):
             html.H3('Drift Report'),
             dash_table.DataTable(id='drift_report_table'),
             html.H3('Metadata'),
-            html.Pre(id='metadata_text')
+            dash_table.DataTable(id='metadata_table')
         ])
 
 @app.callback(
@@ -172,6 +166,7 @@ def update_feature_importance(tab):
         layout = go.Layout(title='Feature Importances')
         return {'data': [data], 'layout': layout}
     return {}
+
 @app.callback(
     [Output('model-analysis-content', 'style'),
      Output('drift-detection-content', 'style')],
@@ -183,6 +178,25 @@ def toggle_tab_content(tab):
     elif tab == 'tab-drift':
         return {'display': 'none'}, {'display': 'block'}
     return {'display': 'none'}, {'display': 'none'}
+
+def format_metadata_for_datatable(metadata_dict):
+    formatted_data = []
+    for key, value in metadata_dict.items():
+        formatted_data.append({"Metric": key, "Description": value})
+    return formatted_data
+
+@app.callback(
+    [Output('metadata_table', 'data'),
+     Output('metadata_table', 'columns')],
+    [Input('tabs', 'value')]
+)
+def update_metadata_table(tab):
+    if tab == 'tab-drift':
+        formatted_metadata_data = format_metadata_for_datatable(metadata_data)
+        metadata_columns = [{"name": "Metric", "id": "Metric"}, {"name": "Description", "id": "Description"}]
+        return formatted_metadata_data, metadata_columns
+    return [], []
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)

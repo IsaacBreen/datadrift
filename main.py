@@ -315,9 +315,9 @@ Kullback-Leibler Divergence: Measures how one probability distribution diverges 
 Population Stability Index: Measures the stability of a feature's distribution over time.
 Z Test Statistic & P-Value: Used for hypothesis testing in boolean features.
 """
-# Convert to a structured dictionary
 metadata_data = {line.split(":")[0].strip(): line.split(":")[1].strip()
                  for line in metadata.split('\n') if line}
+
 
 def generate_example_drift_report():
     # Data Generation (assuming this is specific and remains as provided)
