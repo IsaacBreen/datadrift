@@ -47,7 +47,10 @@ class DataGenerator:
         return data
 
     def generate_verbatim(self, is_systemic):
-        if is_systemic:
+        p = 0.8 if is_systemic else 0.2
+        return_systemic = np.random.choice([True, False], p=[p, 1 - p])
+
+        if return_systemic:
             topics = ["security breach", "rate changes", "hidden fees", "misleading schemes", "service responsiveness"]
         else:
             topics = ["delayed response", "minor errors", "application processing", "terms clarification", "platform usability"]
