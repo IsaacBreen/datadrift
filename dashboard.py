@@ -116,20 +116,29 @@ def render_content(tab):
 @app.callback(
     [Output('drift_report_table', 'data'),
      Output('drift_report_table', 'columns'),
-     Output('drift_report_table', 'style_data_conditional'),     Output('drift_report_table', 'tooltip_data')],    [Input('tabs', 'value')]
+     Output('drift_report_table', 'style_data_conditional'),
+     Output('drift_report_table', 'tooltip_data')],
+    [Input('tabs', 'value')]
 )
 def update_drift_report_table(tab):
     if tab == 'tab-drift':
         drift_data = drift_report.to_dict('records')
         columns = [{"name": i, "id": i} for i in drift_report.columns]
-        style = [{
-            'if': {
-                'column_id': col,
-                'filter_query': f'{{{col}}} < 0.05'
-            },
-            'backgroundColor': '#FF4136',
-            'color': 'white'
-        } for col in ['K-S Test P-Value', 'Chi-Squared P-Value', 'Z Test P-Value']]
+        style = []
+
+        # Define style for P-Value columns
+        p_value_columns = ['K-S Test P-Value', 'Chi-Squared P-Value', 'Z Test P-Value']
+        for col in p_value_columns:
+            style.append({
+                'if': {
+                    'column_id': col,
+                    'filter_query': f'{{{col}}} < 0.05',
+                    'column_type': 'numeric'
+                },
+                'backgroundColor': '#FF4136',
+                'color': 'white'
+            })
+
         tooltips = [{"header": col, "value": f"Tooltip for {col}"} for col in drift_report.columns]
 
         return drift_data, columns, style, tooltips
