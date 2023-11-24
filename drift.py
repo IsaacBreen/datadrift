@@ -8,7 +8,7 @@ from scipy.stats import ks_2samp, chi2_contingency, wasserstein_distance, gaussi
 from sklearn.model_selection import train_test_split
 from termcolor import colored
 
-from data import FeatureEngineering
+from feature_engineering import FeatureEngineering
 from data_generator import DataGenerator
 from train import Model
 

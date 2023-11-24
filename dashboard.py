@@ -4,7 +4,7 @@ from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
 from sklearn.model_selection import train_test_split
 
-from data import FeatureEngineering
+from feature_engineering import FeatureEngineering
 from data_generator import DataGenerator
 from drift import DriftDetection, drift_detection_report, humanize_column_names, colorize_p_values, metadata_data
 from train import Model
@@ -78,7 +78,7 @@ def generate_data():
             results[name] = accuracy
         return results
 
-    new_datasets = {'new_dataset1': data_gen.generate_data(), 'new_dataset2': data_gen.generate_data()}
+    new_datasets = {'jan': data_gen.generate_data(), 'feb': data_gen.generate_data()}
     new_data_results = evaluate_on_new_datasets(model_training, new_datasets, features)
 
     return drift_report, train_accuracy, test_accuracy, model_training, X_train, X_test, y_train, y_test, new_data_results, data, new_data, features, drift_det, feat_eng
@@ -150,7 +150,7 @@ def update_model_performance_graph(tab):
         datasets = ['Train', 'Test'] + list(new_data_results.keys())
         accuracies = [train_accuracy, test_accuracy] + list(new_data_results.values())
         data = go.Bar(x=datasets, y=accuracies)
-        layout = go.Layout(title='Model Performance on Various Datasets')
+        layout = go.Layout(title='Model Performance')
         return {'data': [data], 'layout': layout}
     return {}
 
