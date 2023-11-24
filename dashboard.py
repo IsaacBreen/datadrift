@@ -1,5 +1,6 @@
 import dash
 import numpy as np
+import pandas as pd
 from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
 from sklearn.model_selection import train_test_split
@@ -12,16 +13,6 @@ from train import Model
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 def generate_data():
-    data_gen = DataGenerator(
-        n_rows=100,
-        categories=["A", "B", "C"],
-        p=0.3,
-        loc1=10,
-        loc2=20,
-        scale1=10,
-        scale2=10
-        )
-    data = data_gen.generate_data()
     text_features = ['verbatim_text']
     categorical_features = ['category_feature']
     boolean_features = ['bool_feature']
@@ -32,58 +23,57 @@ def generate_data():
         boolean_features=boolean_features,
         numerical_features=numerical_features
     )
-    data = feat_eng.fit_transform(data)
+
+    # Adjust these parameters to simulate drift
+    training_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.3, loc1=10, loc2=20, scale1=5, scale2=10)
+    testing_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.35, loc1=12, loc2=22, scale1=7, scale2=12)
+    production_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.4, loc1=15, loc2=25, scale1=10, scale2=15)
+
+    # Generate datasets
+    train_data = training_gen.generate_data()
+    test_data = testing_gen.generate_data()
+    production_data = production_gen.generate_data()
+
+    # Reset indices to ensure they are unique
+    train_data = train_data.reset_index(drop=True)
+    test_data = test_data.reset_index(drop=True)
+    production_data = production_data.reset_index(drop=True)
+
+    # Combine and process data
+    combined_data = pd.concat([train_data, test_data, production_data]).reset_index(drop=True)
+    processed_data = feat_eng.fit_transform(combined_data)
+
+    # Split processed data back into train, test, production sets
+    # Calculate the end indices for each dataset
+    train_end = len(train_data)
+    test_end = train_end + len(test_data)
+
+    train_data_processed = processed_data.iloc[:train_end]
+    test_data_processed = processed_data.iloc[train_end:test_end]
+    production_data_processed = processed_data.iloc[test_end:]
+
+    # Train model
     model_training = Model()
-    features = [col for col in data.columns if
-                data[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
+    features = [col for col in processed_data.columns if col not in ['is_systemic_risk', 'date']]
     target = 'is_systemic_risk'
-
-    X_train, X_test, y_train, y_test = train_test_split(data[features], data[target], test_size=0.2, random_state=0, stratify=data[target])
+    X_train, y_train = train_data_processed[features], train_data_processed[target]
     model_training.train(X_train, y_train)
-    y_pred = model_training.predict(X_test)
+
+    # Evaluate the model on each set
     train_accuracy = model_training.evaluate(y_train, model_training.predict(X_train))
-    test_accuracy = model_training.evaluate(y_test, y_pred)
-    data_gen = DataGenerator(
-        n_rows=100,
-        categories=["A", "B", "C"],
-        p=0.4,
-        loc1=15,
-        loc2=20,
-        scale1=10,
-        scale2=10
-        )
-    new_data = data_gen.generate_data()
-    new_data = feat_eng.transform(new_data)
+    test_accuracy = model_training.evaluate(test_data_processed[target], model_training.predict(test_data_processed[features]))
+    production_accuracy = model_training.evaluate(production_data_processed[target], model_training.predict(production_data_processed[features]))
 
+    # Drift detection between training and test sets, and between test and production sets
     drift_det = DriftDetection()
-    drift_report = drift_detection_report(
-        data,
-        new_data,
-        drift_det,
-        feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features}
-        )
+    drift_report_train_test = drift_detection_report(train_data_processed, test_data_processed, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features})
+    drift_report_test_prod = drift_detection_report(test_data_processed, production_data_processed, drift_det, feature_types={'numerical': numerical_features, 'categorical': categorical_features, 'boolean': boolean_features, 'textual': text_features})
 
-    humanize_column_names(drift_report)
-    colorize_p_values(drift_report)
+    return train_accuracy, test_accuracy, production_accuracy, model_training, train_data_processed, test_data_processed, production_data_processed, features, drift_report_train_test, drift_report_test_prod, X_train, y_train
 
-    def evaluate_on_new_datasets(model_training, datasets, features):
-        results = {}
-        for name, new_data in datasets.items():
-            new_data = feat_eng.transform(new_data)  # Ensure the new data is transformed using the same feature engineering
-            X_new = new_data[features]
-            y_new_pred = model_training.predict(X_new)
-            # Assuming the ground truth labels are available in the new datasets
-            y_new_true = new_data['is_systemic_risk']
-            accuracy = model_training.evaluate(y_new_true, y_new_pred)
-            results[name] = accuracy
-        return results
+train_accuracy, test_accuracy, production_accuracy, model_training, train_data, test_data, production_data, features, drift_report_train_test, drift_report_test_prod, X_train, y_train = generate_data()
+drift_report = drift_report_test_prod
 
-    new_datasets = {'jan': data_gen.generate_data(), 'feb': data_gen.generate_data()}
-    new_data_results = evaluate_on_new_datasets(model_training, new_datasets, features)
-
-    return drift_report, train_accuracy, test_accuracy, model_training, X_train, X_test, y_train, y_test, new_data_results, data, new_data, features, drift_det, feat_eng
-
-drift_report, train_accuracy, test_accuracy, model_training, X_train, X_test, y_train, y_test, new_data_results, data, new_data, features, drift_det, feat_eng = generate_data()
 
 # Define the initial layout
 app.layout = html.Div([
@@ -140,17 +130,16 @@ def update_drift_report_table(tab):
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 
-# Graph for Model Performance on New Datasets
 @app.callback(
     Output('model_performance_graph', 'figure'),
     [Input('tabs', 'value')]
 )
 def update_model_performance_graph(tab):
     if tab == 'tab-model':
-        datasets = ['Train', 'Test'] + list(new_data_results.keys())
-        accuracies = [train_accuracy, test_accuracy] + list(new_data_results.values())
-        data = go.Bar(x=datasets, y=accuracies)
-        layout = go.Layout(title='Model Performance')
+        dates = ['2022-01-01 to 2022-04-30', '2022-05-01 to 2022-07-31', '2022-08-01 to 2022-12-31']
+        accuracies = [train_accuracy, test_accuracy, production_accuracy]
+        data = go.Scatter(x=dates, y=accuracies, mode='lines+markers')
+        layout = go.Layout(title='Model Performance Over Time')
         return {'data': [data], 'layout': layout}
     return {}
 

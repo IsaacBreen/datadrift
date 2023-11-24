@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 import numpy as np
 import pandas as pd
 
@@ -36,6 +35,11 @@ class DataGenerator:
         })
 
         data['verbatim_text'] = data['is_systemic_risk'].apply(self.generate_verbatim)
+
+        # Add a date column
+        date_range = pd.date_range(start='2022-01-01', end='2022-12-31', periods=self.n_rows)
+        data['date'] = np.random.choice(date_range, size=self.n_rows)
+
         return data
 
     def generate_verbatim(self, is_systemic):
