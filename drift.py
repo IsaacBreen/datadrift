@@ -64,6 +64,10 @@ class DriftDetection:
 def drift_detection_report(original_data, new_data, drift_detector, feature_types):
     report = []
 
+    # Reset indices to ensure they are unique
+    original_data = original_data.reset_index(drop=True)
+    new_data = new_data.reset_index(drop=True)
+
     # Numerical Features Drift Detection
     for feature in feature_types['numerical']:
         ks_stat, ks_p = drift_detector.ks_test(original_data[feature], new_data[feature])

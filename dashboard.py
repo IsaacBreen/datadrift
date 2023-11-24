@@ -1,13 +1,13 @@
 import dash
 import numpy as np
 import pandas as pd
+import plotly.graph_objs as go
 from dash import html, dash_table, dcc
 from dash.dependencies import Input, Output
-from sklearn.model_selection import train_test_split
 
-from feature_engineering import FeatureEngineering
 from data_generator import DataGenerator
-from drift import DriftDetection, drift_detection_report, humanize_column_names, colorize_p_values, metadata_data
+from drift import DriftDetection, drift_detection_report, metadata_data
+from feature_engineering import FeatureEngineering
 from train import Model
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -25,14 +25,17 @@ def generate_data():
     )
 
     # Adjust these parameters to simulate drift
-    training_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.3, loc1=10, loc2=20, scale1=5, scale2=10)
-    testing_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.35, loc1=12, loc2=22, scale1=7, scale2=12)
-    production_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.4, loc1=15, loc2=25, scale1=10, scale2=15)
+    training_gen = DataGenerator(n_rows=100, categories=["A", "B", "C"], p=0.2, loc1=10, loc2=20, scale1=5, scale2=10, start_date='2022-01-01', end_date='2022-06-30')
+    testing_gen = DataGenerator(n_rows=1000, categories=["A", "B", "C"], p=0.2, loc1=10, loc2=20, scale1=5, scale2=10, start_date='2022-01-01', end_date='2022-06-30')
+    production_gen1 = DataGenerator(n_rows=1000, categories=["A", "B", "C"], p=0.2, loc1=10, loc2=20, scale1=5, scale2=10, start_date='2022-07-01', end_date='2023-12-31')
+    production_gen2 = DataGenerator(n_rows=1000, categories=["A", "B", "C"], p=0.5, loc1=10, loc2=20, scale1=5, scale2=10, start_date='2024-01-01', end_date='2024-12-31')
 
     # Generate datasets
     train_data = training_gen.generate_data()
     test_data = testing_gen.generate_data()
-    production_data = production_gen.generate_data()
+    production_data1 = production_gen1.generate_data()
+    production_data2 = production_gen2.generate_data()
+    production_data = pd.concat([production_data1, production_data2])
 
     # Reset indices to ensure they are unique
     train_data = train_data.reset_index(drop=True)
@@ -54,15 +57,20 @@ def generate_data():
 
     # Train model
     model_training = Model()
-    features = [col for col in processed_data.columns if col not in ['is_systemic_risk', 'date']]
+    features = [col for col in train_data_processed.columns if train_data_processed[col].dtype in [np.float64, np.float32, np.int64, np.int32, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_] and col != 'is_systemic_risk']
     target = 'is_systemic_risk'
     X_train, y_train = train_data_processed[features], train_data_processed[target]
     model_training.train(X_train, y_train)
 
-    # Evaluate the model on each set
-    train_accuracy = model_training.evaluate(y_train, model_training.predict(X_train))
-    test_accuracy = model_training.evaluate(test_data_processed[target], model_training.predict(test_data_processed[features]))
-    production_accuracy = model_training.evaluate(production_data_processed[target], model_training.predict(production_data_processed[features]))
+    # Get dates for each set
+    train_dates = train_data_processed['date']
+    test_dates = test_data_processed['date']
+    production_dates = production_data_processed['date']
+
+    # Evaluate the model on each set with dates
+    train_accuracy = model_training.evaluate_row_by_row(y_train, model_training.predict(X_train), train_dates)
+    test_accuracy = model_training.evaluate_row_by_row(test_data_processed[target], model_training.predict(test_data_processed[features]), test_dates)
+    production_accuracy = model_training.evaluate_row_by_row(production_data_processed[target], model_training.predict(production_data_processed[features]), production_dates)
 
     # Drift detection between training and test sets, and between test and production sets
     drift_det = DriftDetection()
@@ -127,20 +135,52 @@ def update_drift_report_table(tab):
         return drift_data, columns, style, tooltips
     return [], [], [], []
 
-from dash.dependencies import Input, Output
-import plotly.graph_objs as go
-
 @app.callback(
     Output('model_performance_graph', 'figure'),
     [Input('tabs', 'value')]
 )
 def update_model_performance_graph(tab):
     if tab == 'tab-model':
-        dates = ['2022-01-01 to 2022-04-30', '2022-05-01 to 2022-07-31', '2022-08-01 to 2022-12-31']
-        accuracies = [train_accuracy, test_accuracy, production_accuracy]
-        data = go.Scatter(x=dates, y=accuracies, mode='lines+markers')
-        layout = go.Layout(title='Model Performance Over Time')
-        return {'data': [data], 'layout': layout}
+        # Convert the 'Date' column to datetime if it's not already
+        train_accuracy['Date'] = pd.to_datetime(train_accuracy['Date'])
+        test_accuracy['Date'] = pd.to_datetime(test_accuracy['Date'])
+        production_accuracy['Date'] = pd.to_datetime(production_accuracy['Date'])
+
+        # Resample to get monthly averages and compute mean of 'Accuracy' for each month
+        train_monthly = train_accuracy.resample('M', on='Date').mean()
+        test_monthly = test_accuracy.resample('M', on='Date').mean()
+        production_monthly = production_accuracy.resample('M', on='Date').mean()
+
+        # Now create scatter plots for the monthly data
+        train_scatter = go.Scatter(
+            x=train_monthly.index,
+            y=train_monthly['Accuracy'].astype(float),
+            mode='lines+markers',
+            name='Train'
+        )
+        test_scatter = go.Scatter(
+            x=test_monthly.index,
+            y=test_monthly['Accuracy'].astype(float),
+            mode='lines+markers',
+            name='Test'
+        )
+        production_scatter = go.Scatter(
+            x=production_monthly.index,
+            y=production_monthly['Accuracy'].astype(float),
+            mode='lines+markers',
+            name='Production'
+        )
+
+        layout = go.Layout(
+            title='Model Performance Over Time',
+            xaxis={
+                'title': 'Date',
+                'tickformat': '%Y-%m',  # Format the x-axis ticks to show only year and month
+            },
+            yaxis={'title': 'Average Monthly Accuracy'}
+        )
+
+        return {'data': [train_scatter, test_scatter, production_scatter], 'layout': layout}
     return {}
 
 @app.callback(

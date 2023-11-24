@@ -13,6 +13,8 @@ class DataGenerator:
     loc2: float
     scale1: float
     scale2: float
+    start_date: str = '2022-01-01'
+    end_date: str = '2022-12-31'
 
     def generate_data(self):
         half_n_rows = self.n_rows // 2
@@ -37,7 +39,7 @@ class DataGenerator:
         data['verbatim_text'] = data['is_systemic_risk'].apply(self.generate_verbatim)
 
         # Add a date column
-        date_range = pd.date_range(start='2022-01-01', end='2022-12-31', periods=self.n_rows)
+        date_range = pd.date_range(start=self.start_date, end=self.end_date)
         data['date'] = np.random.choice(date_range, size=self.n_rows)
 
         return data
